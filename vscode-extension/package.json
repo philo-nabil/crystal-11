@@ -7,22 +7,45 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "icon": "images/icon.png",
   "categories": ["Other"],
   "keywords": ["AVR", "ATmega32A", "embedded", "microcontroller", "wizard"],
-  "activationEvents": [
-    "onCommand:crystal11.openWizard",
-    "onCommand:crystal11.flashDevice"
-  ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "crystal11-sidebar",
+          "title": "crystal-11 AVR Wizard",
+          "icon": "images/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "crystal11-sidebar": [
+        {
+          "id": "crystal11.welcomeView",
+          "name": "AVR Wizard",
+          "icon": "images/activity.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "crystal11.welcomeView",
+        "contents": "ATmega32A peripheral init code generator.\n\n[Open Code Wizard](command:crystal11.openWizard)"
+      }
+    ],
     "commands": [
       {
         "command": "crystal11.openWizard",
-        "title": "crystal-11: Open AVR Code Wizard"
+        "title": "crystal-11: Open AVR Code Wizard",
+        "icon": "images/activity.svg"
       },
       {
         "command": "crystal11.flashDevice",
-        "title": "crystal-11: Flash to Device"
+        "title": "crystal-11: Flash to Device",
+        "icon": "images/activity.svg"
       }
     ],
     "menus": {

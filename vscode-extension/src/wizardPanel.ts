@@ -126,7 +126,9 @@ export class WizardPanel {
 
     // Use vscode.workspace.fs — respects remote workspaces (SSH, WSL, Codespaces).
     // Node's fs.writeFileSync does not.
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(code, "utf-8"));
+    // TextEncoder returns a native Uint8Array, avoiding the Buffer/ArrayBuffer
+    // type mismatch that occurs with newer @types/node versions.
+    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(code));
 
     vscode.window.showInformationMessage(
       `crystal-11: Saved to ${uri.path.split("/").pop()}`
@@ -208,24 +210,40 @@ export class WizardPanel {
     <h2>Chip Settings</h2>
     <div class="field"><label>Chip</label><select disabled><option>ATmega32A</option></select></div>
     <div class="field">
-      <label>Clock Frequency (MHz)</label>
-      <select id="clockHz" data-action="update">
-        <option value="1000000">1.000000 MHz</option>
-        <option value="4000000">4.000000 MHz</option>
-        <option value="8000000">8.000000 MHz</option>
-        <option value="11059200" selected>11.059200 MHz</option>
-        <option value="12000000">12.000000 MHz</option>
-        <option value="14745600">14.745600 MHz</option>
-        <option value="16000000">16.000000 MHz</option>
-        <option value="20000000">20.000000 MHz</option>
-      </select>
+      <label>Clock Frequency (Hz)</label>
+      <input type="text" id="clockHz" value="11059200" placeholder="e.g. 11059200" data-action="update" style="max-width:180px">
+      <div class="field-hint" id="clock-mhz-display">= 11.0592 MHz</div>
     </div>
   </div>
 
   <div class="panel" id="panel-ports">
     <h2>I/O Ports</h2>
-    <p class="hint-text">Configure each pin: In (input), Out (output), PU (input with pull-up)</p>
-    <div class="pin-grid" id="pin-grid"></div>
+    <div class="ports-layout">
+
+      <!-- Left: port tabs + pin table -->
+      <div class="ports-left">
+        <div class="port-tabs" id="port-tabs">
+          <button class="port-tab active" data-port="A">Port A</button>
+          <button class="port-tab" data-port="B">Port B</button>
+          <button class="port-tab" data-port="C">Port C</button>
+          <button class="port-tab" data-port="D">Port D</button>
+        </div>
+        <div id="port-table-container"></div>
+      </div>
+
+      <!-- Right: ATmega32A chip schematic -->
+      <div class="ports-right">
+        <div class="schematic-label">ATmega32A pinout</div>
+        <div id="schematic-container"></div>
+        <div class="schematic-legend">
+          <span class="leg-item"><span class="leg-dot leg-dot--tristate"></span>In / Tristate</span>
+          <span class="leg-item"><span class="leg-dot leg-dot--pullup"></span>In / Pullup</span>
+          <span class="leg-item"><span class="leg-dot leg-dot--low"></span>Out / Low</span>
+          <span class="leg-item"><span class="leg-dot leg-dot--high"></span>Out / High</span>
+        </div>
+      </div>
+
+    </div>
   </div>
 
   <div class="panel" id="panel-usart">
@@ -577,49 +595,371 @@ function onSettingChange() {
   if (intItem) {
     if (intEnabled) { intItem.classList.add('enabled'); } else { intItem.classList.remove('enabled'); }
   }
+  updateSchematic();
+  updateClockDisplay();
 }
 
-// Pin grid — DOM API only, no innerHTML with dynamic data
-function buildPinGrid() {
-  var grid = document.getElementById('pin-grid');
-  if (!grid) { return; }
-  while (grid.firstChild) { grid.removeChild(grid.firstChild); }
-  var ports = ['A','B','C','D'];
-  var emptyH = document.createElement('div'); emptyH.className = 'header'; grid.appendChild(emptyH);
-  for (var i = 7; i >= 0; i--) {
-    var h = document.createElement('div'); h.className = 'header';
-    h.textContent = 'Bit' + i; grid.appendChild(h);
-  }
-  ports.forEach(function(p) {
-    var lbl = document.createElement('div'); lbl.className = 'port-label';
-    lbl.textContent = 'PORT' + p; grid.appendChild(lbl);
-    for (var i = 7; i >= 0; i--) {
-      var sel = document.createElement('select');
-      sel.id = 'pin-' + p + '-' + i;
-      sel.dataset.action = 'update';
-      [['in_tri','In'],['in_pu','PU'],['out_lo','Out 0'],['out_hi','Out 1']].forEach(function(pair) {
-        var opt = document.createElement('option');
-        opt.value = pair[0]; opt.textContent = pair[1]; sel.appendChild(opt);
-      });
-      grid.appendChild(sel);
+// ── ATmega32A pinout data ──────────────────────────────────────────────────────
+// Maps each physical pin to its port/bit. null port = power/special pin.
+var MEGA32_PINS = [
+  // left side, top→bottom (pins 1-20)
+  {num:1,  name:'PB0',   side:'L', idx:0,  port:'B', bit:0},
+  {num:2,  name:'PB1',   side:'L', idx:1,  port:'B', bit:1},
+  {num:3,  name:'PB2',   side:'L', idx:2,  port:'B', bit:2},
+  {num:4,  name:'PB3',   side:'L', idx:3,  port:'B', bit:3},
+  {num:5,  name:'PB4',   side:'L', idx:4,  port:'B', bit:4},
+  {num:6,  name:'PB5',   side:'L', idx:5,  port:'B', bit:5},
+  {num:7,  name:'PB6',   side:'L', idx:6,  port:'B', bit:6},
+  {num:8,  name:'PB7',   side:'L', idx:7,  port:'B', bit:7},
+  {num:9,  name:'/RST',  side:'L', idx:8,  port:null, bit:null},
+  {num:10, name:'VCC',   side:'L', idx:9,  port:null, bit:null},
+  {num:11, name:'GND',   side:'L', idx:10, port:null, bit:null},
+  {num:12, name:'XTAL2', side:'L', idx:11, port:null, bit:null},
+  {num:13, name:'XTAL1', side:'L', idx:12, port:null, bit:null},
+  {num:14, name:'PD0',   side:'L', idx:13, port:'D', bit:0},
+  {num:15, name:'PD1',   side:'L', idx:14, port:'D', bit:1},
+  {num:16, name:'PD2',   side:'L', idx:15, port:'D', bit:2},
+  {num:17, name:'PD3',   side:'L', idx:16, port:'D', bit:3},
+  {num:18, name:'PD4',   side:'L', idx:17, port:'D', bit:4},
+  {num:19, name:'PD5',   side:'L', idx:18, port:'D', bit:5},
+  {num:20, name:'PD6',   side:'L', idx:19, port:'D', bit:6},
+  // right side, top→bottom = pins 40 down to 21
+  {num:40, name:'PA0',   side:'R', idx:0,  port:'A', bit:0},
+  {num:39, name:'PA1',   side:'R', idx:1,  port:'A', bit:1},
+  {num:38, name:'PA2',   side:'R', idx:2,  port:'A', bit:2},
+  {num:37, name:'PA3',   side:'R', idx:3,  port:'A', bit:3},
+  {num:36, name:'PA4',   side:'R', idx:4,  port:'A', bit:4},
+  {num:35, name:'PA5',   side:'R', idx:5,  port:'A', bit:5},
+  {num:34, name:'PA6',   side:'R', idx:6,  port:'A', bit:6},
+  {num:33, name:'PA7',   side:'R', idx:7,  port:'A', bit:7},
+  {num:32, name:'AREF',  side:'R', idx:8,  port:null, bit:null},
+  {num:31, name:'AGND',  side:'R', idx:9,  port:null, bit:null},
+  {num:30, name:'AVCC',  side:'R', idx:10, port:null, bit:null},
+  {num:29, name:'PC7',   side:'R', idx:11, port:'C', bit:7},
+  {num:28, name:'PC6',   side:'R', idx:12, port:'C', bit:6},
+  {num:27, name:'PC5',   side:'R', idx:13, port:'C', bit:5},
+  {num:26, name:'PC4',   side:'R', idx:14, port:'C', bit:4},
+  {num:25, name:'PC3',   side:'R', idx:15, port:'C', bit:3},
+  {num:24, name:'PC2',   side:'R', idx:16, port:'C', bit:2},
+  {num:23, name:'PC1',   side:'R', idx:17, port:'C', bit:1},
+  {num:22, name:'PC0',   side:'R', idx:18, port:'C', bit:0},
+  {num:21, name:'PD7',   side:'R', idx:19, port:'D', bit:7},
+];
+
+function pinColor(port, bit) {
+  if (!port) { return '#555'; }
+  // Always read from portState — DOM only exists for the active tab
+  var saved = portState[port] && portState[port][bit];
+  if (!saved) { return '#666'; }
+  if (saved.dir === 'out' && saved.state === '1') { return '#4ec94e'; }
+  if (saved.dir === 'out' && saved.state === '0') { return '#FF8C42'; }
+  if (saved.dir === 'in'  && saved.state === 'P') { return '#4A9EFF'; }
+  return '#666'; // in/tristate
+}
+
+// ── Port table ────────────────────────────────────────────────────────────────
+
+var activePort = 'A';
+
+// portState is the single source of truth for all pin configurations.
+// The DOM is just a view of it — rebuilt on tab switch by reading from here.
+var portState = (function() {
+  var s = {};
+  ['A','B','C','D'].forEach(function(p) {
+    s[p] = [];
+    for (var i = 0; i < 8; i++) {
+      s[p][i] = {dir: 'in', state: 'T'};
     }
+  });
+  return s;
+})();
+
+function buildPortUI() {
+  var tabsEl = g('port-tabs');
+  if (tabsEl) {
+    tabsEl.addEventListener('click', function(e) {
+      var btn = e.target.closest('.port-tab');
+      if (!btn) { return; }
+      // Save current tab's DOM values back to portState before switching
+      saveTabToState(activePort);
+      activePort = btn.dataset.port;
+      document.querySelectorAll('.port-tab').forEach(function(t) { t.classList.remove('active'); });
+      btn.classList.add('active');
+      renderPortTable(activePort);
+    });
+  }
+  renderPortTable('A');
+  buildSchematic();
+}
+
+// Flush the current tab's DOM selects into portState
+function saveTabToState(port) {
+  for (var bit = 0; bit < 8; bit++) {
+    var dirEl   = g('pin-' + port + '-' + bit + '-dir');
+    var stateEl = g('pin-' + port + '-' + bit + '-state');
+    if (dirEl && stateEl) {
+      portState[port][bit].dir   = dirEl.value;
+      portState[port][bit].state = stateEl.value;
+    }
+  }
+}
+
+function renderPortTable(port) {
+  var container = g('port-table-container');
+  if (!container) { return; }
+  while (container.firstChild) { container.removeChild(container.firstChild); }
+
+  var table = document.createElement('table');
+  table.className = 'pin-table';
+
+  var thead = document.createElement('thead');
+  var hrow  = document.createElement('tr');
+  ['Bit', 'Direction', 'State'].forEach(function(label) {
+    var th = document.createElement('th'); th.textContent = label; hrow.appendChild(th);
+  });
+  thead.appendChild(hrow); table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  for (var bit = 0; bit < 8; bit++) {
+    var row = document.createElement('tr');
+
+    // Bit label
+    var tdBit = document.createElement('td');
+    tdBit.className = 'bit-label';
+    tdBit.textContent = 'Bit ' + bit;
+    row.appendChild(tdBit);
+
+    // Direction select — restore from portState
+    var saved  = portState[port][bit];
+    var dirSel = document.createElement('select');
+    dirSel.id = 'pin-' + port + '-' + bit + '-dir';
+    dirSel.className = 'dir-sel';
+    dirSel.dataset.action = 'update';
+    [['in','In'], ['out','Out']].forEach(function(pair) {
+      var opt = document.createElement('option');
+      opt.value = pair[0]; opt.textContent = pair[1];
+      if (pair[0] === saved.dir) { opt.selected = true; }
+      dirSel.appendChild(opt);
+    });
+    var tdDir = document.createElement('td'); tdDir.appendChild(dirSel); row.appendChild(tdDir);
+
+    // State select — restore from portState
+    var stateSel = document.createElement('select');
+    stateSel.id = 'pin-' + port + '-' + bit + '-state';
+    stateSel.className = 'state-sel';
+    stateSel.dataset.action = 'update';
+    populateStateOptions(stateSel, saved.dir, saved.state);
+
+    // When direction changes, repopulate state options and persist to portState
+    dirSel.addEventListener('change', (function(ds, ss, p, b) {
+      return function() {
+        var newDir = ds.value;
+        var newState = newDir === 'out' ? '0' : 'T';
+        populateStateOptions(ss, newDir, newState);
+        portState[p][b].dir   = newDir;
+        portState[p][b].state = newState;
+        updateSchematic();
+      };
+    })(dirSel, stateSel, port, bit));
+
+    stateSel.addEventListener('change', (function(ss, p, b) {
+      return function() {
+        portState[p][b].state = ss.value;
+        updateSchematic();
+      };
+    })(stateSel, port, bit));
+
+    var tdState = document.createElement('td'); tdState.appendChild(stateSel); row.appendChild(tdState);
+    tbody.appendChild(row);
+  }
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function populateStateOptions(sel, dir, selectedVal) {
+  while (sel.firstChild) { sel.removeChild(sel.firstChild); }
+  var opts = dir === 'out'
+    ? [['0','0  (Low)'], ['1','1  (High)']]
+    : [['T','T  (Tristate)'], ['P','P  (Pullup)']];
+  opts.forEach(function(pair) {
+    var opt = document.createElement('option');
+    opt.value = pair[0]; opt.textContent = pair[1];
+    if (selectedVal !== undefined && pair[0] === selectedVal) { opt.selected = true; }
+    sel.appendChild(opt);
+  });
+}
+
+// ── ATmega32A schematic ───────────────────────────────────────────────────────
+
+var SVG_NS = 'http://www.w3.org/2000/svg';
+var PIN_STEP = 14; // px between pins
+var PIN_Y0   = 22; // y of first pin
+var BODY_X1  = 72;
+var BODY_X2  = 168;
+var STUB_LEN = 18;
+
+function buildSchematic() {
+  var container = g('schematic-container');
+  if (!container) { return; }
+  while (container.firstChild) { container.removeChild(container.firstChild); }
+
+  var svgH = PIN_Y0 * 2 + 19 * PIN_STEP; // 20 pins each side
+  var svgW = 280;
+  var svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + svgW + ' ' + svgH);
+  svg.setAttribute('width',  svgW);
+  svg.setAttribute('height', svgH);
+  svg.id = 'chip-svg';
+
+  // Chip body
+  var body = document.createElementNS(SVG_NS, 'rect');
+  body.setAttribute('x', BODY_X1); body.setAttribute('y', 8);
+  body.setAttribute('width', BODY_X2 - BODY_X1);
+  body.setAttribute('height', svgH - 16);
+  body.setAttribute('rx', '4');
+  body.setAttribute('fill', '#2a2a2a');
+  body.setAttribute('stroke', '#555');
+  body.setAttribute('stroke-width', '1.5');
+  svg.appendChild(body);
+
+  // Notch (pin-1 indicator)
+  var notch = document.createElementNS(SVG_NS, 'path');
+  var cx = (BODY_X1 + BODY_X2) / 2;
+  notch.setAttribute('d', 'M' + (cx-10) + ',8 A10,10 0 0,0 ' + (cx+10) + ',8');
+  notch.setAttribute('fill', '#1a1a1a');
+  notch.setAttribute('stroke', '#555');
+  notch.setAttribute('stroke-width', '1.5');
+  svg.appendChild(notch);
+
+  // "ATmega32A" label inside chip
+  var chipLabel = document.createElementNS(SVG_NS, 'text');
+  chipLabel.setAttribute('x', (BODY_X1 + BODY_X2) / 2);
+  chipLabel.setAttribute('y', svgH / 2 - 6);
+  chipLabel.setAttribute('text-anchor', 'middle');
+  chipLabel.setAttribute('font-size', '9');
+  chipLabel.setAttribute('fill', '#aaa');
+  chipLabel.setAttribute('font-family', 'monospace');
+  chipLabel.textContent = 'ATmega32A';
+  svg.appendChild(chipLabel);
+  var chipLabel2 = document.createElementNS(SVG_NS, 'text');
+  chipLabel2.setAttribute('x', (BODY_X1 + BODY_X2) / 2);
+  chipLabel2.setAttribute('y', svgH / 2 + 8);
+  chipLabel2.setAttribute('text-anchor', 'middle');
+  chipLabel2.setAttribute('font-size', '8');
+  chipLabel2.setAttribute('fill', '#777');
+  chipLabel2.setAttribute('font-family', 'monospace');
+  chipLabel2.textContent = 'DIP-40';
+  svg.appendChild(chipLabel2);
+
+  // Draw each pin
+  MEGA32_PINS.forEach(function(pin) {
+    var y = PIN_Y0 + pin.idx * PIN_STEP;
+    var isLeft = pin.side === 'L';
+    var x1 = isLeft ? BODY_X1 : BODY_X2;
+    var x2 = isLeft ? BODY_X1 - STUB_LEN : BODY_X2 + STUB_LEN;
+
+    // Pin stub line
+    var line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y);
+    line.setAttribute('stroke-width', '1.5');
+    if (pin.port) {
+      line.id = 'schpin-' + pin.port + '-' + pin.bit;
+      line.setAttribute('stroke', pinColor(pin.port, pin.bit));
+    } else {
+      line.setAttribute('stroke', '#555');
+    }
+    svg.appendChild(line);
+
+    // Pin dot at tip
+    var dot = document.createElementNS(SVG_NS, 'circle');
+    dot.setAttribute('cx', x2); dot.setAttribute('cy', y); dot.setAttribute('r', '2.5');
+    if (pin.port) {
+      dot.id = 'schpin-dot-' + pin.port + '-' + pin.bit;
+      dot.setAttribute('fill', pinColor(pin.port, pin.bit));
+    } else {
+      dot.setAttribute('fill', '#555');
+    }
+    svg.appendChild(dot);
+
+    // Pin number (inside chip body edge)
+    var numText = document.createElementNS(SVG_NS, 'text');
+    numText.setAttribute('x', isLeft ? BODY_X1 + 5 : BODY_X2 - 5);
+    numText.setAttribute('y', y + 3);
+    numText.setAttribute('text-anchor', isLeft ? 'start' : 'end');
+    numText.setAttribute('font-size', '7');
+    numText.setAttribute('fill', '#888');
+    numText.setAttribute('font-family', 'monospace');
+    numText.textContent = pin.num;
+    svg.appendChild(numText);
+
+    // Pin name (outside chip body)
+    var nameText = document.createElementNS(SVG_NS, 'text');
+    nameText.setAttribute('x', isLeft ? x2 - 4 : x2 + 4);
+    nameText.setAttribute('y', y + 3);
+    nameText.setAttribute('text-anchor', isLeft ? 'end' : 'start');
+    nameText.setAttribute('font-size', '8');
+    nameText.setAttribute('font-family', 'monospace');
+    nameText.setAttribute('font-weight', pin.port ? '600' : 'normal');
+    if (pin.port) {
+      nameText.id = 'schpin-name-' + pin.port + '-' + pin.bit;
+      nameText.setAttribute('fill', pinColor(pin.port, pin.bit));
+    } else {
+      nameText.setAttribute('fill', '#666');
+    }
+    nameText.textContent = pin.name;
+    svg.appendChild(nameText);
+  });
+
+  container.appendChild(svg);
+}
+
+function updateSchematic() {
+  MEGA32_PINS.forEach(function(pin) {
+    if (!pin.port) { return; }
+    var color = pinColor(pin.port, pin.bit);
+    var lineEl = g('schpin-' + pin.port + '-' + pin.bit);
+    var dotEl  = g('schpin-dot-' + pin.port + '-' + pin.bit);
+    var nameEl = g('schpin-name-' + pin.port + '-' + pin.bit);
+    if (lineEl) { lineEl.setAttribute('stroke', color); }
+    if (dotEl)  { dotEl.setAttribute('fill', color); }
+    if (nameEl) { nameEl.setAttribute('fill', color); }
   });
 }
 
 function g(id) { return document.getElementById(id); }
 
+function updateClockDisplay() {
+  var raw = g('clockHz').value.trim();
+  var hz = parseInt(raw, 10);
+  var display = g('clock-mhz-display');
+  if (!display) { return; }
+  if (!isNaN(hz) && hz > 0) {
+    display.textContent = '= ' + (hz / 1000000).toFixed(4) + ' MHz';
+    display.style.color = '';
+  } else {
+    display.textContent = 'invalid — enter frequency in Hz';
+    display.style.color = '#FF8C42';
+  }
+}
+
 function buildConfig() {
-  var clockHz = parseInt(g('clockHz').value, 10);
+  var raw = g('clockHz').value.trim();
+  var clockHz = parseInt(raw, 10);
+  if (isNaN(clockHz) || clockHz <= 0) { clockHz = 11059200; } // fallback
+
   var ports = {};
   ['A','B','C','D'].forEach(function(p) {
     var pins = [];
     for (var i = 0; i < 8; i++) {
-      var el = g('pin-' + p + '-' + i);
-      var val = el ? el.value : 'in_tri';
-      if      (val === 'in_tri') { pins[i] = {mode:'in',  state:'tristate'}; }
-      else if (val === 'in_pu')  { pins[i] = {mode:'in',  state:'pullup'  }; }
-      else if (val === 'out_lo') { pins[i] = {mode:'out', state:'low'     }; }
-      else                       { pins[i] = {mode:'out', state:'high'    }; }
+      var dirEl   = g('pin-' + p + '-' + i + '-dir');
+      var stateEl = g('pin-' + p + '-' + i + '-state');
+      var dir   = dirEl   ? dirEl.value   : 'in';
+      var state = stateEl ? stateEl.value : 'T';
+      if      (dir === 'out' && state === '0') { pins[i] = {mode:'out', state:'low'     }; }
+      else if (dir === 'out' && state === '1') { pins[i] = {mode:'out', state:'high'    }; }
+      else if (dir === 'in'  && state === 'P') { pins[i] = {mode:'in',  state:'pullup'  }; }
+      else                                     { pins[i] = {mode:'in',  state:'tristate'}; }
     }
     ports[p] = pins;
   });
@@ -697,7 +1037,7 @@ window.addEventListener('message', function(e) {
   }
 });
 
-buildPinGrid();
+buildPortUI();
 </script>
 </body>
 </html>`;

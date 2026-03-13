@@ -110,31 +110,135 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
 .row { display: flex; gap: 24px; flex-wrap: wrap; }
 .row .field { flex: 1; min-width: 180px; }
 
-/* ── Pin grid ── */
-.pin-grid {
-  display: grid;
-  grid-template-columns: 60px repeat(8, 1fr);
-  gap: 4px;
-  margin-bottom: 16px;
-  max-width: 600px;
+/* ── Ports layout ── */
+.ports-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
 }
-.pin-grid .header {
-  text-align: center;
-  font-size: 11px;
+
+.ports-left {
+  flex: 0 0 auto;
+  min-width: 280px;
+}
+
+.ports-right {
+  flex: 0 0 auto;
+}
+
+/* Port tabs */
+.port-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.port-tab {
+  padding: 5px 14px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px 3px 0 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.port-tab.active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+  border-bottom-color: var(--vscode-list-activeSelectionBackground);
+}
+
+/* Pin table */
+.pin-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 0 3px 3px 3px;
+}
+
+.pin-table th {
+  padding: 6px 12px;
+  text-align: left;
+  background: var(--vscode-sideBar-background);
   color: var(--vscode-descriptionForeground);
-  padding: 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-weight: 600;
 }
-.pin-grid .port-label {
+
+.pin-table td {
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.pin-table tr:last-child td { border-bottom: none; }
+.pin-table tr:hover td { background: var(--vscode-list-hoverBackground); }
+
+.bit-label {
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  white-space: nowrap;
+}
+
+.dir-sel, .state-sel {
+  width: auto;
+  min-width: 90px;
+  max-width: none;
+  font-size: 12px;
+  padding: 3px 6px;
+}
+
+/* Schematic */
+.schematic-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 8px;
+}
+
+#schematic-container svg {
+  display: block;
+}
+
+.schematic-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.leg-item {
   display: flex;
   align-items: center;
-  font-weight: 600;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
 }
-.pin-grid select {
-  padding: 3px 2px;
-  font-size: 10px;
-  max-width: none;
-  width: 100%;
+
+.leg-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.leg-dot--tristate { background: #666; }
+.leg-dot--pullup   { background: #4A9EFF; }
+.leg-dot--low      { background: #FF8C42; }
+.leg-dot--high     { background: #4ec94e; }
+
+/* Clock hint */
+.field-hint {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 4px;
 }
 
 /* ── Code preview ── */
