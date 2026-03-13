@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>crystal-11 AVR Wizard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 200px;
+    min-width: 200px;
+    background: var(--vscode-sideBar-background);
+    border-right: 1px solid var(--vscode-panel-border);
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .sidebar-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--vscode-foreground);
+    opacity: 0.7;
+    transition: all 0.1s;
+  }
+
+  .sidebar-item:hover { opacity: 1; background: var(--vscode-list-hoverBackground); }
+  .sidebar-item.active {
+    opacity: 1;
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+  }
+
+  .sidebar-item .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--vscode-descriptionForeground);
+    flex-shrink: 0;
+  }
+  .sidebar-item.enabled .dot { background: #4ec94e; }
+
+  /* ── Main area ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    display: none;
+  }
+  .panel.active { display: block; }
+
+  h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+  }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  input[type="text"], input[type="number"], select {
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: 5px 8px;
+    border-radius: 2px;
+    width: 100%;
+    max-width: 280px;
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+
+  .checkbox-row input { cursor: pointer; width: 14px; height: 14px; }
+
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .row .field { flex: 1; min-width: 180px; }
+
+  /* ── Pin grid ── */
+  .pin-grid {
+    display: grid;
+    grid-template-columns: 60px repeat(8, 1fr);
+    gap: 4px;
+    margin-bottom: 16px;
+    max-width: 600px;
+  }
+
+  .pin-grid .header {
+    text-align: center;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    padding: 2px;
+  }
+
+  .pin-grid .port-label {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  .pin-grid select {
+    padding: 3px 2px;
+    font-size: 10px;
+    max-width: none;
+    width: 100%;
+  }
+
+  /* ── Code preview ── */
+  .preview-area {
+    width: 380px;
+    min-width: 300px;
+    background: var(--vscode-editor-background);
+    border-left: 1px solid var(--vscode-panel-border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .preview-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--vscode-sideBar-background);
+  }
+
+  .preview-header span { font-size: 12px; font-weight: 600; }
+
+  pre {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--vscode-editor-foreground);
+    white-space: pre;
+  }
+
+  /* ── Bottom toolbar ── */
+  .toolbar {
+    padding: 12px 32px;
+    border-top: 1px solid var(--vscode-panel-border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: var(--vscode-sideBar-background);
+  }
+
+  button {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  .btn-primary {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+  .btn-primary:hover { background: var(--vscode-button-hoverBackground); }
+
+  .btn-secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+  }
+  .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+  .hint {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-left: auto;
+  }
+
+  .section-enable {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 10px 14px;
+    background: var(--vscode-sideBar-background);
+    border-radius: 4px;
+    border: 1px solid var(--vscode-panel-border);
+  }
+
+  .section-enable label { font-size: 13px; font-weight: 500; cursor: pointer; }
+  .collapsible { display: none; }
+  .collapsible.visible { display: block; }
+
+  .divider {
+    margin: 16px 0;
+    border: none;
+    border-top: 1px solid var(--vscode-panel-border);
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar navigation -->
+<nav class="sidebar">
+  <div class="sidebar-item active" data-panel="chip" onclick="showPanel('chip')">
+    <span class="dot"></span> Chip
+  </div>
+  <div class="sidebar-item" data-panel="ports" onclick="showPanel('ports')">
+    <span class="dot"></span> Ports
+  </div>
+  <div class="sidebar-item" data-panel="usart" onclick="showPanel('usart')">
+    <span class="dot"></span> USART
+  </div>
+  <div class="sidebar-item" data-panel="adc" onclick="showPanel('adc')">
+    <span class="dot"></span> ADC
+  </div>
+  <div class="sidebar-item" data-panel="timer0" onclick="showPanel('timer0')">
+    <span class="dot"></span> Timer 0
+  </div>
+  <div class="sidebar-item" data-panel="timer1" onclick="showPanel('timer1')">
+    <span class="dot"></span> Timer 1
+  </div>
+  <div class="sidebar-item" data-panel="timer2" onclick="showPanel('timer2')">
+    <span class="dot"></span> Timer 2
+  </div>
+  <div class="sidebar-item" data-panel="spi" onclick="showPanel('spi')">
+    <span class="dot"></span> SPI
+  </div>
+  <div class="sidebar-item" data-panel="i2c" onclick="showPanel('i2c')">
+    <span class="dot"></span> I2C (TWI)
+  </div>
+  <div class="sidebar-item" data-panel="interrupts" onclick="showPanel('interrupts')">
+    <span class="dot"></span> Interrupts
+  </div>
+  <div class="sidebar-item" data-panel="meta" onclick="showPanel('meta')">
+    <span class="dot"></span> Project Info
+  </div>
+</nav>
+
+<!-- Main content area -->
+<div class="main">
+
+  <!-- ── CHIP ── -->
+  <div class="panel active" id="panel-chip">
+    <h2>Chip Settings</h2>
+    <div class="field">
+      <label>Chip</label>
+      <select disabled><option>ATmega32A</option></select>
+    </div>
+    <div class="field">
+      <label>Clock Frequency (MHz)</label>
+      <select id="clockHz" onchange="update()">
+        <option value="1000000">1.000000 MHz</option>
+        <option value="4000000">4.000000 MHz</option>
+        <option value="8000000">8.000000 MHz</option>
+        <option value="11059200" selected>11.059200 MHz</option>
+        <option value="12000000">12.000000 MHz</option>
+        <option value="14745600">14.745600 MHz</option>
+        <option value="16000000">16.000000 MHz</option>
+        <option value="20000000">20.000000 MHz</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ── PORTS ── -->
+  <div class="panel" id="panel-ports">
+    <h2>I/O Ports</h2>
+    <p style="margin-bottom:16px; font-size:12px; color:var(--vscode-descriptionForeground)">
+      Configure each pin: In (input), Out (output), PU (input with pull-up)
+    </p>
+    <div class="pin-grid" id="pin-grid"></div>
+  </div>
+
+  <!-- ── USART ── -->
+  <div class="panel" id="panel-usart">
+    <h2>USART</h2>
+    <div class="section-enable">
+      <input type="checkbox" id="usart-enabled" onchange="toggleSection('usart'); update()">
+      <label for="usart-enabled">Enable USART</label>
+    </div>
+    <div class="collapsible" id="usart-section">
+      <div class="row">
+        <div class="field">
+          <label>Baud Rate</label>
+          <select id="usart-baud" onchange="update()">
+            <option>1200</option><option>2400</option><option>4800</option>
+            <option selected>9600</option><option>14400</option><option>19200</option>
+            <option>38400</option><option>57600</option><option>115200</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mode</label>
+          <select id="usart-mode" onchange="update()">
+            <option value="async">Asynchronous</option>
+            <option value="sync_master_cpol0">Sync Master UCPOL=0</option>
+            <option value="sync_master_cpol1">Sync Master UCPOL=1</option>
+            <option value="sync_slave_cpol0">Sync Slave UCPOL=0</option>
+            <option value="sync_slave_cpol1">Sync Slave UCPOL=1</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Communication Parameters</label>
+          <select id="usart-params" onchange="update()">
+            <option value="8,1,none">8 Data, 1 Stop, No Parity</option>
+            <option value="8,2,none">8 Data, 2 Stop, No Parity</option>
+            <option value="8,1,even">8 Data, 1 Stop, Even Parity</option>
+            <option value="8,1,odd">8 Data, 1 Stop, Odd Parity</option>
+            <option value="7,1,none">7 Data, 1 Stop, No Parity</option>
+            <option value="7,2,none">7 Data, 2 Stop, No Parity</option>
+            <option value="7,1,even">7 Data, 1 Stop, Even Parity</option>
+            <option value="7,1,odd">7 Data, 1 Stop, Odd Parity</option>
+            <option value="9,1,none">9 Data, 1 Stop, No Parity</option>
+          </select>
+        </div>
+      </div>
+      <hr class="divider">
+      <div class="checkbox-row">
+        <input type="checkbox" id="usart-rx" checked onchange="update()">
+        <label for="usart-rx">Receiver</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="usart-tx" checked onchange="update()">
+        <label for="usart-tx">Transmitter</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="usart-rxint" onchange="update()">
+        <label for="usart-rxint">Rx Interrupt (ring buffer)</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="usart-txint" onchange="update()">
+        <label for="usart-txint">Tx Interrupt (ring buffer)</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ADC ── -->
+  <div class="panel" id="panel-adc">
+    <h2>Analog to Digital Converter</h2>
+    <div class="section-enable">
+      <input type="checkbox" id="adc-enabled" onchange="toggleSection('adc'); update()">
+      <label for="adc-enabled">Enable ADC</label>
+    </div>
+    <div class="collapsible" id="adc-section">
+      <div class="row">
+        <div class="field">
+          <label>Voltage Reference</label>
+          <select id="adc-vref" onchange="update()">
+            <option value="aref">AREF pin</option>
+            <option value="avcc">AVCC pin</option>
+            <option value="internal">Internal 2.56V</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Clock</label>
+          <select id="adc-clock" onchange="update()">
+            <option value="125">125 kHz</option>
+            <option value="250">250 kHz</option>
+            <option value="500">500 kHz</option>
+            <option value="1000" selected>1000 kHz</option>
+            <option value="2000">2000 kHz</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Auto Trigger Source</label>
+        <select id="adc-trigger" onchange="update()">
+          <option value="stopped">ADC Stopped</option>
+          <option value="free_running">Free Running</option>
+          <option value="analog_comparator">Analog Comparator</option>
+          <option value="ext_irq0">External IRQ0</option>
+          <option value="timer0_compare">Timer0 Compare Match</option>
+          <option value="timer0_overflow">Timer0 Overflow</option>
+          <option value="timer1_compare_b">Timer1 Compare Match B</option>
+          <option value="timer1_overflow">Timer1 Overflow</option>
+          <option value="timer1_capture">Timer1 Capture Event</option>
+        </select>
+      </div>
+      <hr class="divider">
+      <div class="checkbox-row">
+        <input type="checkbox" id="adc-8bit" onchange="update()">
+        <label for="adc-8bit">Use 8 bits (ADLAR)</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="adc-interrupt" onchange="update()">
+        <label for="adc-interrupt">Interrupt</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="adc-noise" onchange="update()">
+        <label for="adc-noise">Noise Canceler</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TIMER 0 ── -->
+  <div class="panel" id="panel-timer0">
+    <h2>Timer / Counter 0</h2>
+    <div class="section-enable">
+      <input type="checkbox" id="t0-enabled" onchange="toggleSection('t0'); update()">
+      <label for="t0-enabled">Enable Timer 0</label>
+    </div>
+    <div class="collapsible" id="t0-section">
+      <div class="row">
+        <div class="field">
+          <label>Mode</label>
+          <select id="t0-mode" onchange="update()">
+            <option value="normal">Normal top=FFh</option>
+            <option value="ctc">CTC top=OCR0</option>
+            <option value="fast_pwm">Fast PWM top=FFh</option>
+            <option value="phase_correct_pwm">Phase Correct PWM top=FFh</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Prescaler</label>
+          <select id="t0-prescaler" onchange="update()">
+            <option value="off">Timer Stopped</option>
+            <option value="1">1</option>
+            <option value="8">8</option>
+            <option value="64">64</option>
+            <option value="256" selected>256</option>
+            <option value="1024">1024</option>
+            <option value="ext_falling">Ext Falling</option>
+            <option value="ext_rising">Ext Rising</option>
+          </select>
+        </div>
+      </div>
+      <hr class="divider">
+      <div class="checkbox-row">
+        <input type="checkbox" id="t0-ovf" onchange="update()">
+        <label for="t0-ovf">Overflow Interrupt</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="t0-cmp" onchange="update()">
+        <label for="t0-cmp">Compare Match Interrupt</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TIMER 1 ── -->
+  <div class="panel" id="panel-timer1">
+    <h2>Timer / Counter 1</h2>
+    <div class="section-enable">
+      <input type="checkbox" id="t1-enabled" onchange="toggleSection('t1'); update()">
+      <label for="t1-enabled">Enable Timer 1</label>
+    </div>
+    <div class="collapsible" id="t1-section">
+      <div class="row">
+        <div class="field">
+          <label>Prescaler</label>
+          <select id="t1-prescaler" onchange="update()">
+            <option value="off">Timer Stopped</option>
+            <option value="1">1</option>
+            <option value="8">8</option>
+            <option value="64">64</option>
+            <option value="256" selected>256</option>
+            <option value="1024">1024</option>
+            <option value="ext_falling">Ext Falling</option>
+            <option value="ext_rising">Ext Rising</option>
+          </select>
+        </div>
+      </div>
+      <hr class="divider">
+      <div class="checkbox-row">
+        <input type="checkbox" id="t1-ovf" onchange="update()">
+        <label for="t1-ovf">Overflow Interrupt</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="t1-cmpa" onchange="update()">
+        <label for="t1-cmpa">Compare A Interrupt</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="t1-cmpb" onchange="update()">
+        <label for="t1-cmpb">Compare B Interrupt</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="t1-cap" onchange="update()">
+        <label for="t1-cap">Input Capture Interrupt</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TIMER 2 ── -->
+  <div class="panel" id="panel-timer2">
+    <h2>Timer / Counter 2</h2>
+    <div class="section-enable">
+      <input type="checkbox" id="t2-enabled" onchange="toggleSection('t2'); update()">
+      <label for="t2-enabled">Enable Timer 2</label>
+    </div>
+    <div class="collapsible" id="t2-section">
+      <div class="row">
+        <div class="field">
+          <label>Mode</label>
+          <select id="t2-mode" onchange="update()">
+            <option value="normal">Normal top=FFh</option>
+            <option value="ctc">CTC top=OCR2</option>
+            <option value="fast_pwm">Fast PWM top=FFh</option>
+            <option value="phase_correct_pwm">Phase Correct PWM top=FFh</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Prescaler</label>
+          <select id="t2-prescaler" onchange="update()">
+            <option value="off">Timer Stopped</option>
+            <option value="1">1</option>
+            <option value="8">8</option>
+            <option value="32">32</option>
+            <option value="64">64</option>
+            <option value="128">128</option>
+            <option value="256" selected>256</option>
+            <option value="1024">1024</option>
+          </select>
+        </div>
+      </div>
+      <hr class="divider">
+      <div class="checkbox-row">
+        <input type="checkbox" id="t2-ovf" onchange="update()">
+        <label for="t2-ovf">Overflow Interrupt</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="t2-cmp" onchange="update()">
+        <label for="t2-cmp">Compare Match Interrupt</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="t2-async" onchange="update()">
+        <label for="t2-async">Asynchronous (32.768 kHz crystal)</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SPI ── -->
+  <div class="panel" id="panel-spi">
+    <h2>Serial Peripheral Interface</h2>
+    <div class="section-enable">
+      <input type="checkbox" id="spi-enabled" onchange="toggleSection('spi'); update()">
+      <label for="spi-enabled">Enable SPI</label>
+    </div>
+    <div class="collapsible" id="spi-section">
+      <div class="row">
+        <div class="field">
+          <label>Mode</label>
+          <select id="spi-mode" onchange="update()">
+            <option value="master">Master</option>
+            <option value="slave">Slave</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Clock Rate</label>
+          <select id="spi-clock" onchange="update()">
+            <option value="fosc_4">Fosc/4</option>
+            <option value="fosc_16" selected>Fosc/16</option>
+            <option value="fosc_64">Fosc/64</option>
+            <option value="fosc_128">Fosc/128</option>
+            <option value="fosc_2">Fosc/2</option>
+            <option value="fosc_8">Fosc/8</option>
+            <option value="fosc_32">Fosc/32</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Clock Polarity (CPOL)</label>
+          <select id="spi-cpol" onchange="update()">
+            <option value="0">0 — Low when idle</option>
+            <option value="1">1 — High when idle</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Clock Phase (CPHA)</label>
+          <select id="spi-cpha" onchange="update()">
+            <option value="0">0 — Sample on leading edge</option>
+            <option value="1">1 — Sample on trailing edge</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Data Order</label>
+        <select id="spi-order" onchange="update()">
+          <option value="msb">MSB First</option>
+          <option value="lsb">LSB First</option>
+        </select>
+      </div>
+      <hr class="divider">
+      <div class="checkbox-row">
+        <input type="checkbox" id="spi-interrupt" onchange="update()">
+        <label for="spi-interrupt">Interrupt</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── I2C ── -->
+  <div class="panel" id="panel-i2c">
+    <h2>Two Wire Interface (I2C)</h2>
+    <div class="section-enable">
+      <input type="checkbox" id="i2c-enabled" onchange="toggleSection('i2c'); update()">
+      <label for="i2c-enabled">Enable I2C</label>
+    </div>
+    <div class="collapsible" id="i2c-section">
+      <div class="row">
+        <div class="field">
+          <label>Bit Rate (kHz)</label>
+          <select id="i2c-bitrate" onchange="update()">
+            <option value="100" selected>100 kHz (Standard)</option>
+            <option value="400">400 kHz (Fast)</option>
+            <option value="50">50 kHz</option>
+            <option value="200">200 kHz</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Slave Address (hex)</label>
+          <input type="text" id="i2c-addr" value="0x00" maxlength="4" onchange="update()">
+        </div>
+      </div>
+      <hr class="divider">
+      <div class="checkbox-row">
+        <input type="checkbox" id="i2c-gcr" onchange="update()">
+        <label for="i2c-gcr">General Call Recognition</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="i2c-interrupt" onchange="update()">
+        <label for="i2c-interrupt">Interrupt</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── INTERRUPTS ── -->
+  <div class="panel" id="panel-interrupts">
+    <h2>External Interrupts</h2>
+
+    <div style="margin-bottom:20px">
+      <div class="checkbox-row">
+        <input type="checkbox" id="int0-enabled" onchange="update()">
+        <label for="int0-enabled"><strong>INT0</strong> (PD2)</label>
+      </div>
+      <div class="field" style="margin-left:22px">
+        <label>Trigger</label>
+        <select id="int0-trigger" onchange="update()">
+          <option value="low_level">Low Level</option>
+          <option value="any_change">Any Change</option>
+          <option value="falling" selected>Falling Edge</option>
+          <option value="rising">Rising Edge</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div class="checkbox-row">
+        <input type="checkbox" id="int1-enabled" onchange="update()">
+        <label for="int1-enabled"><strong>INT1</strong> (PD3)</label>
+      </div>
+      <div class="field" style="margin-left:22px">
+        <label>Trigger</label>
+        <select id="int1-trigger" onchange="update()">
+          <option value="low_level">Low Level</option>
+          <option value="any_change">Any Change</option>
+          <option value="falling" selected>Falling Edge</option>
+          <option value="rising">Rising Edge</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="int2-enabled" onchange="update()">
+        <label for="int2-enabled"><strong>INT2</strong> (PB2)</label>
+      </div>
+      <div class="field" style="margin-left:22px">
+        <label>Trigger</label>
+        <select id="int2-trigger" onchange="update()">
+          <option value="falling" selected>Falling Edge</option>
+          <option value="rising">Rising Edge</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── META ── -->
+  <div class="panel" id="panel-meta">
+    <h2>Project Information</h2>
+    <div class="field">
+      <label>Project Name</label>
+      <input type="text" id="meta-project" placeholder="MyProject" oninput="update()">
+    </div>
+    <div class="field">
+      <label>Version</label>
+      <input type="text" id="meta-version" placeholder="1.0" oninput="update()">
+    </div>
+    <div class="field">
+      <label>Author</label>
+      <input type="text" id="meta-author" placeholder="Your name" oninput="update()">
+    </div>
+    <div class="field">
+      <label>Company</label>
+      <input type="text" id="meta-company" placeholder="Your company" oninput="update()">
+    </div>
+    <div class="field">
+      <label>Comments</label>
+      <input type="text" id="meta-comments" placeholder="Optional notes" oninput="update()">
+    </div>
+  </div>
+
+  <!-- Bottom toolbar -->
+  <div class="toolbar">
+    <button class="btn-primary" onclick="generate()">Generate Code</button>
+    <button class="btn-secondary" onclick="saveToFile()" id="btn-save" disabled>Save main.c</button>
+    <span class="hint" id="hint">Configure peripherals, then click Generate.</span>
+  </div>
+</div>
+
+<!-- Code preview -->
+<div class="preview-area">
+  <div class="preview-header">
+    <span>main.c preview</span>
+  </div>
+  <pre id="code-preview">// Configure peripherals on the left,
+// then click Generate Code.</pre>
+</div>
+
+<script>
+const vscode = acquireVsCodeApi();
+let lastCode = "";
+
+// ── Panel navigation ──────────────────────────────────────────────────────────
+
+function showPanel(name) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".sidebar-item").forEach(s => s.classList.remove("active"));
+  document.getElementById("panel-" + name).classList.add("active");
+  document.querySelector(`[data-panel="${name}"]`).classList.add("active");
+}
+
+function toggleSection(name) {
+  const enabled = document.getElementById(name + "-enabled").checked;
+  const section = document.getElementById(name + "-section");
+  if (enabled) section.classList.add("visible");
+  else section.classList.remove("visible");
+
+  // update sidebar dot
+  const panelMap = { usart: "usart", adc: "adc", t0: "timer0", t1: "timer1", t2: "timer2", spi: "spi", i2c: "i2c" };
+  const sidebarItem = document.querySelector(`[data-panel="${panelMap[name]}"]`);
+  if (sidebarItem) {
+    if (enabled) sidebarItem.classList.add("enabled");
+    else sidebarItem.classList.remove("enabled");
+  }
+}
+
+// ── Pin grid ─────────────────────────────────────────────────────────────────
+
+function buildPinGrid() {
+  const grid = document.getElementById("pin-grid");
+  const ports = ["A", "B", "C", "D"];
+
+  // Header row
+  grid.innerHTML = '<div class="header"></div>';
+  for (let i = 7; i >= 0; i--) {
+    grid.innerHTML += `<div class="header">Bit${i}</div>`;
+  }
+
+  ports.forEach(p => {
+    grid.innerHTML += `<div class="port-label">PORT${p}</div>`;
+    for (let i = 7; i >= 0; i--) {
+      grid.innerHTML += `
+        <select id="pin-${p}-${i}" onchange="update()">
+          <option value="in_tri">In</option>
+          <option value="in_pu">PU</option>
+          <option value="out_lo">Out 0</option>
+          <option value="out_hi">Out 1</option>
+        </select>`;
+    }
+  });
+}
+
+// ── Build config from UI ──────────────────────────────────────────────────────
+
+function buildConfig() {
+  const clockHz = parseInt(document.getElementById("clockHz").value);
+
+  // Ports
+  const ports = {};
+  ["A","B","C","D"].forEach(p => {
+    const pins = [];
+    for (let i = 0; i < 8; i++) {
+      const val = document.getElementById(`pin-${p}-${i}`)?.value ?? "in_tri";
+      if (val === "in_tri")  pins[i] = { mode: "in",  state: "tristate" };
+      else if (val === "in_pu")  pins[i] = { mode: "in",  state: "pullup"   };
+      else if (val === "out_lo") pins[i] = { mode: "out", state: "low"      };
+      else                       pins[i] = { mode: "out", state: "high"     };
+    }
+    ports[p] = pins;
+  });
+
+  const config = { chip: "atmega32a", clockHz, ports };
+
+  // USART
+  if (document.getElementById("usart-enabled").checked) {
+    const params = document.getElementById("usart-params").value.split(",");
+    config.usart = {
+      baudRate: parseInt(document.getElementById("usart-baud").value),
+      dataBits: parseInt(params[0]),
+      stopBits: parseInt(params[1]),
+      parity: params[2],
+      mode: document.getElementById("usart-mode").value,
+      receiver: document.getElementById("usart-rx").checked,
+      transmitter: document.getElementById("usart-tx").checked,
+      rxInterrupt: document.getElementById("usart-rxint").checked,
+      txInterrupt: document.getElementById("usart-txint").checked,
+    };
+  }
+
+  // ADC
+  if (document.getElementById("adc-enabled").checked) {
+    config.adc = {
+      enabled: true,
+      use8bit: document.getElementById("adc-8bit").checked,
+      interrupt: document.getElementById("adc-interrupt").checked,
+      noiseCanceler: document.getElementById("adc-noise").checked,
+      voltRef: document.getElementById("adc-vref").value,
+      clockKHz: parseInt(document.getElementById("adc-clock").value),
+      triggerSource: document.getElementById("adc-trigger").value,
+    };
+  }
+
+  // Timer 0
+  if (document.getElementById("t0-enabled").checked) {
+    config.timer0 = {
+      mode: document.getElementById("t0-mode").value,
+      prescaler: document.getElementById("t0-prescaler").value,
+      overflowInterrupt: document.getElementById("t0-ovf").checked,
+      compareInterrupt: document.getElementById("t0-cmp").checked,
+    };
+  }
+
+  // Timer 1
+  if (document.getElementById("t1-enabled").checked) {
+    config.timer1 = {
+      mode: "normal",
+      prescaler: document.getElementById("t1-prescaler").value,
+      overflowInterrupt: document.getElementById("t1-ovf").checked,
+      compareAInterrupt: document.getElementById("t1-cmpa").checked,
+      compareBInterrupt: document.getElementById("t1-cmpb").checked,
+      captureInterrupt: document.getElementById("t1-cap").checked,
+    };
+  }
+
+  // Timer 2
+  if (document.getElementById("t2-enabled").checked) {
+    config.timer2 = {
+      mode: document.getElementById("t2-mode").value,
+      prescaler: document.getElementById("t2-prescaler").value,
+      overflowInterrupt: document.getElementById("t2-ovf").checked,
+      compareInterrupt: document.getElementById("t2-cmp").checked,
+      asynchronous: document.getElementById("t2-async").checked,
+    };
+  }
+
+  // SPI
+  if (document.getElementById("spi-enabled").checked) {
+    config.spi = {
+      enabled: true,
+      mode: document.getElementById("spi-mode").value,
+      clockRate: document.getElementById("spi-clock").value,
+      clockPolarity: parseInt(document.getElementById("spi-cpol").value),
+      clockPhase: parseInt(document.getElementById("spi-cpha").value),
+      dataOrder: document.getElementById("spi-order").value,
+      interrupt: document.getElementById("spi-interrupt").checked,
+    };
+  }
+
+  // I2C
+  if (document.getElementById("i2c-enabled").checked) {
+    const addrStr = document.getElementById("i2c-addr").value;
+    config.i2c = {
+      enabled: true,
+      bitRateKHz: parseInt(document.getElementById("i2c-bitrate").value),
+      slaveAddress: parseInt(addrStr, 16) || 0,
+      generalCallRecognition: document.getElementById("i2c-gcr").checked,
+      interrupt: document.getElementById("i2c-interrupt").checked,
+    };
+  }
+
+  // External interrupts
+  const int0en = document.getElementById("int0-enabled").checked;
+  const int1en = document.getElementById("int1-enabled").checked;
+  const int2en = document.getElementById("int2-enabled").checked;
+  if (int0en || int1en || int2en) {
+    config.externalInterrupts = {};
+    if (int0en) config.externalInterrupts.int0 = { enabled: true, trigger: document.getElementById("int0-trigger").value };
+    if (int1en) config.externalInterrupts.int1 = { enabled: true, trigger: document.getElementById("int1-trigger").value };
+    if (int2en) config.externalInterrupts.int2 = { enabled: true, trigger: document.getElementById("int2-trigger").value };
+  }
+
+  return config;
+}
+
+function buildMeta() {
+  return {
+    project:  document.getElementById("meta-project").value,
+    version:  document.getElementById("meta-version").value,
+    author:   document.getElementById("meta-author").value,
+    company:  document.getElementById("meta-company").value,
+    comments: document.getElementById("meta-comments").value,
+  };
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+
+function update() {
+  // live-update sidebar dots for interrupt panel
+  const intEnabled = ["int0-enabled","int1-enabled","int2-enabled"].some(id => document.getElementById(id).checked);
+  const intItem = document.querySelector('[data-panel="interrupts"]');
+  if (intEnabled) intItem.classList.add("enabled");
+  else intItem.classList.remove("enabled");
+}
+
+function generate() {
+  const config = buildConfig();
+  const meta = buildMeta();
+  document.getElementById("hint").textContent = "Generating...";
+  vscode.postMessage({ command: "generate", config, meta });
+}
+
+function saveToFile() {
+  if (!lastCode) return;
+  vscode.postMessage({ command: "saveToFile", code: lastCode });
+}
+
+// ── Messages from extension ───────────────────────────────────────────────────
+
+window.addEventListener("message", e => {
+  const msg = e.data;
+  if (msg.command === "codeReady") {
+    lastCode = msg.code;
+    document.getElementById("code-preview").textContent = msg.code;
+    document.getElementById("btn-save").disabled = false;
+    document.getElementById("hint").textContent = "Done. Click Save main.c to write to disk.";
+  }
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+buildPinGrid();
+</script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+/* crystal-11 AVR Wizard — styles extracted from webview
+   Must live in media/ so style-src webview.cspSource allows it.
+   Inline <style> blocks and style="" attributes are blocked by CSP. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 200px;
+  min-width: 200px;
+  background: var(--vscode-sideBar-background);
+  border-right: 1px solid var(--vscode-panel-border);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.sidebar-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vscode-foreground);
+  opacity: 0.7;
+  transition: all 0.1s;
+}
+.sidebar-item:hover { opacity: 1; background: var(--vscode-list-hoverBackground); }
+.sidebar-item.active {
+  opacity: 1;
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+.sidebar-item .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--vscode-descriptionForeground);
+  flex-shrink: 0;
+}
+.sidebar-item.enabled .dot { background: #4ec94e; }
+
+/* ── Main area ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  display: none;
+}
+.panel.active { display: block; }
+
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.field { margin-bottom: 16px; }
+.field label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+input[type="text"], input[type="number"], select {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  padding: 5px 8px;
+  border-radius: 2px;
+  width: 100%;
+  max-width: 280px;
+  font-family: inherit;
+  font-size: inherit;
+}
+input[type="text"]:focus, input[type="number"]:focus, select:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  border-color: var(--vscode-focusBorder);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.checkbox-row input { cursor: pointer; width: 14px; height: 14px; }
+
+.row { display: flex; gap: 24px; flex-wrap: wrap; }
+.row .field { flex: 1; min-width: 180px; }
+
+/* ── Pin grid ── */
+.pin-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(8, 1fr);
+  gap: 4px;
+  margin-bottom: 16px;
+  max-width: 600px;
+}
+.pin-grid .header {
+  text-align: center;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  padding: 2px;
+}
+.pin-grid .port-label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+.pin-grid select {
+  padding: 3px 2px;
+  font-size: 10px;
+  max-width: none;
+  width: 100%;
+}
+
+/* ── Code preview ── */
+.preview-area {
+  width: 380px;
+  min-width: 300px;
+  background: var(--vscode-editor-background);
+  border-left: 1px solid var(--vscode-panel-border);
+  display: flex;
+  flex-direction: column;
+}
+.preview-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--vscode-sideBar-background);
+}
+.preview-header span { font-size: 12px; font-weight: 600; }
+
+pre {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--vscode-editor-foreground);
+  white-space: pre;
+}
+
+/* ── Bottom toolbar ── */
+.toolbar {
+  padding: 12px 32px;
+  border-top: 1px solid var(--vscode-panel-border);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--vscode-sideBar-background);
+}
+
+button {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+}
+.btn-primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+.btn-primary:hover { background: var(--vscode-button-hoverBackground); }
+.btn-secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+.btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+.hint {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-left: auto;
+}
+
+.hint-text {
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.section-enable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  background: var(--vscode-sideBar-background);
+  border-radius: 4px;
+  border: 1px solid var(--vscode-panel-border);
+}
+.section-enable label { font-size: 13px; font-weight: 500; cursor: pointer; }
+
+.collapsible { display: none; }
+.collapsible.visible { display: block; }
+
+.divider {
+  margin: 16px 0;
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* ── Interrupts ── */
+.int-group { margin-bottom: 20px; }
+.int-trigger { margin-left: 22px; }

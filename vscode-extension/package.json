@@ -1,0 +1,80 @@
+{
+  "name": "crystal-11",
+  "displayName": "crystal-11 AVR Wizard",
+  "description": "AVR peripheral init code generator for ATmega32A",
+  "version": "0.1.0",
+  "publisher": "philo-nabil",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "keywords": ["AVR", "ATmega32A", "embedded", "microcontroller", "wizard"],
+  "activationEvents": [
+    "onCommand:crystal11.openWizard",
+    "onCommand:crystal11.flashDevice"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "crystal11.openWizard",
+        "title": "crystal-11: Open AVR Code Wizard"
+      },
+      {
+        "command": "crystal11.flashDevice",
+        "title": "crystal-11: Flash to Device"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "crystal11.flashDevice",
+          "when": "resourceExtname == .hex",
+          "group": "crystal11"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "crystal-11",
+      "properties": {
+        "crystal11.avrdudePort": {
+          "type": "string",
+          "default": "usb",
+          "description": "Port for avrdude (e.g. usb, COM3, /dev/ttyUSB0)"
+        },
+        "crystal11.programmer": {
+          "type": "string",
+          "default": "usbasp",
+          "enum": ["usbasp", "avrispmkII", "arduino", "stk500"],
+          "description": "ISP programmer type"
+        },
+        "crystal11.avrdudeExtra": {
+          "type": "string",
+          "default": "",
+          "description": "Extra avrdude flags"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm audit && npm run package",
+    "compile": "node esbuild.js",
+    "package": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src",
+    "pretest": "npm run compile",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.85.0",
+    "@types/node": "20.11.5",
+    "@typescript-eslint/eslint-plugin": "7.2.0",
+    "@typescript-eslint/parser": "7.2.0",
+    "@vscode/test-cli": "0.0.6",
+    "@vscode/test-electron": "2.3.9",
+    "esbuild": "0.20.2",
+    "eslint": "8.57.0",
+    "typescript": "5.4.5"
+  }
+}

@@ -1,0 +1,16 @@
+# Source files — not needed in published extension
+src/
+**/*.ts
+**/*.map
+tsconfig.json
+esbuild.js
+
+# Dev dependencies
+node_modules/
+
+# Repo metadata
+.git/
+.gitignore
+.gitattributes
+
+# NOTE: Do NOT add **/*.md here — the Marketplace displays README.md
