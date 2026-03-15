@@ -3,6 +3,7 @@ import * as crypto from "crypto";
 import { generateCode } from "crystal-11-core";
 import { WizardConfig } from "crystal-11-core/types";
 import { isSafePath } from "./utils/validate";
+import { resolveToolchain, getInstallGuide } from "./utils/toolchain";
 
 // Security: hex encoding — no padding chars (+, /, =) unlike base64.
 // Skill rule: nonces must use hex encoding, not base64.
@@ -72,6 +73,11 @@ export class WizardPanel {
               await this._handleSaveToFile(message.code);
             }
             break;
+          case "createProject":
+            if (message.code !== undefined) {
+              await this._handleCreateProject(message.code);
+            }
+            break;
           default:
             console.warn(`crystal-11: unknown webview message: ${message.command}`);
         }
@@ -136,6 +142,122 @@ export class WizardPanel {
 
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc);
+  }
+
+  private async _handleCreateProject(code: string): Promise<void> {
+    const enc = new TextEncoder();
+
+    // ── 1. Resolve avr-gcc ────────────────────────────────────────────────────
+    const toolchain = await resolveToolchain();
+
+    if (!toolchain) {
+      const guide = getInstallGuide();
+      const choice = await vscode.window.showErrorMessage(
+        `crystal-11: avr-gcc not found on your system.`,
+        "Show Install Instructions",
+        "Set Path Manually",
+        "Continue Anyway"
+      );
+      if (choice === "Show Install Instructions") {
+        await vscode.window.showInformationMessage(
+          `Run this in your terminal:\n${guide.command}`,
+          { modal: true, detail: guide.note }
+        );
+        return;
+      } else if (choice === "Set Path Manually") {
+        await vscode.commands.executeCommand(
+          "workbench.action.openSettings", "crystal11.avrGccPath"
+        );
+        return;
+      } else if (choice !== "Continue Anyway") {
+        return;
+      }
+    } else {
+      const src = toolchain.source === "setting" ? "from your settings" : "auto-detected";
+      vscode.window.setStatusBarMessage(
+        `crystal-11: avr-gcc ${src} → ${toolchain.gccPath}`, 5000
+      );
+    }
+
+    // ── 2. Pick parent folder ─────────────────────────────────────────────────
+    const parentUris = await vscode.window.showOpenDialog({
+      canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+      openLabel: "Select parent folder",
+      title: "crystal-11: Choose where to create the project",
+    });
+    if (!parentUris || parentUris.length === 0) { return; }
+    const parentUri = parentUris[0];
+
+    // ── 3. Pick project name ──────────────────────────────────────────────────
+    const projectName = await vscode.window.showInputBox({
+      prompt: "Project name (will become the folder name)",
+      value: "avr-project",
+      validateInput: (v) => {
+        if (!v.trim()) { return "Name cannot be empty"; }
+        if (!/^[\w\-. ]+$/.test(v)) { return "Use only letters, digits, hyphens, underscores, dots"; }
+        return undefined;
+      },
+    });
+    if (!projectName) { return; }
+
+    const projectUri = vscode.Uri.joinPath(parentUri, projectName.trim());
+
+    // ── 4. Create folders ─────────────────────────────────────────────────────
+    await vscode.workspace.fs.createDirectory(projectUri);
+    await vscode.workspace.fs.createDirectory(
+      vscode.Uri.joinPath(projectUri, ".vscode")
+    );
+
+    // ── 5. Write main.c ───────────────────────────────────────────────────────
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.joinPath(projectUri, "main.c"),
+      enc.encode(code)
+    );
+
+    // ── 6. Write .vscode/c_cpp_properties.json ────────────────────────────────
+    const gccPath    = toolchain?.gccPath    ?? (process.platform === "win32"
+      ? "C:\\WinAVR-20100110\\bin\\avr-gcc.exe"
+      : "/usr/bin/avr-gcc");
+    const includeDir = toolchain?.includePath ?? "/usr/avr/include";
+
+    const cppProps = {
+      configurations: [{
+        name: "AVR",
+        includePath: [
+          includeDir,
+          "/opt/homebrew/avr/include",
+          "/usr/local/avr/include",
+          "/usr/lib/avr/include",
+          "\${workspaceFolder}/**",
+        ],
+        defines: ["F_CPU=11059200UL", "__AVR_ATmega32A__"],
+        compilerPath: gccPath,
+        cStandard: "gnu99",
+        intelliSenseMode: "gcc-x64",
+      }],
+      version: 4,
+    };
+
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.joinPath(projectUri, ".vscode", "c_cpp_properties.json"),
+      enc.encode(JSON.stringify(cppProps, null, 2))
+    );
+
+    // ── 7. Open project ───────────────────────────────────────────────────────
+    const note = toolchain
+      ? `avr-gcc found at ${toolchain.gccPath}`
+      : "⚠️ avr-gcc not found — install it before building";
+
+    const choice = await vscode.window.showInformationMessage(
+      `crystal-11: Project "${projectName.trim()}" created. ${note}`,
+      "Open Folder", "Open in New Window"
+    );
+
+    if (choice === "Open Folder") {
+      await vscode.commands.executeCommand("vscode.openFolder", projectUri, false);
+    } else if (choice === "Open in New Window") {
+      await vscode.commands.executeCommand("vscode.openFolder", projectUri, true);
+    }
   }
 
   private _update(): void {
@@ -523,6 +645,7 @@ export class WizardPanel {
   <div class="toolbar">
     <button class="btn-primary" id="btn-generate">Generate Code</button>
     <button class="btn-secondary" id="btn-save" disabled>Save main.c</button>
+    <button class="btn-accent" id="btn-create-project" disabled>Create Project</button>
     <span class="hint" id="hint">Configure peripherals, then click Generate.</span>
   </div>
 </div>
@@ -560,6 +683,7 @@ function handleEvent(e) {
 
 document.getElementById('btn-generate').addEventListener('click', generate);
 document.getElementById('btn-save').addEventListener('click', saveToFile);
+document.getElementById('btn-create-project').addEventListener('click', createProject);
 
 function showPanel(name) {
   document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
@@ -1026,6 +1150,11 @@ function saveToFile() {
   vscode.postMessage({command:'saveToFile', code:lastCode});
 }
 
+function createProject() {
+  if (!lastCode) { return; }
+  vscode.postMessage({command:'createProject', code:lastCode});
+}
+
 window.addEventListener('message', function(e) {
   var msg = e.data;
   if (msg.command === 'codeReady') {
@@ -1033,7 +1162,8 @@ window.addEventListener('message', function(e) {
     // textContent — never innerHTML for dynamic data
     g('code-preview').textContent = msg.code;
     g('btn-save').disabled = false;
-    g('hint').textContent = 'Done. Click Save main.c to write to disk.';
+    g('btn-create-project').disabled = false;
+    g('hint').textContent = 'Done. Click Save main.c or Create Project.';
   }
 });
 

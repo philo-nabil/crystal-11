@@ -46,6 +46,11 @@
         "command": "crystal11.flashDevice",
         "title": "crystal-11: Flash to Device",
         "icon": "images/activity.svg"
+      },
+      {
+        "command": "crystal11.checkCompiler",
+        "title": "crystal-11: Check avr-gcc Installation",
+        "icon": "images/activity.svg"
       }
     ],
     "menus": {
@@ -60,6 +65,16 @@
     "configuration": {
       "title": "crystal-11",
       "properties": {
+        "crystal11.avrGccPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to avr-gcc binary. Leave empty to auto-detect from common install locations (Homebrew, apt, WinAVR)."
+        },
+        "crystal11.compilerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to avr-gcc binary. Leave empty to auto-detect from PATH and common install locations."
+        },
         "crystal11.avrdudePort": {
           "type": "string",
           "default": "usb",
