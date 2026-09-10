@@ -51,31 +51,30 @@ export function generateADCPreamble(config: ADCConfig): string {
   if (!config.interrupt) {
     if (config.use8bit) {
       return `${vrefLine}
-// Read the 8 most significant bits
-// of the AD conversion result
+// Blocking read, returns the top 8 bits of the conversion (left-adjusted)
 unsigned char read_adc(unsigned char adc_input)
 {
 ADMUX=adc_input | ADC_VREF_TYPE;
-// Delay needed for the stabilization of the ADC input voltage
+// let the input settle before sampling
 delay_us(10);
-// Start the AD conversion
+// kick off a conversion
 ADCSRA|=(1<<ADSC);
-// Wait for the AD conversion to complete
+// spin until it's done
 while ((ADCSRA & (1<<ADIF))==0);
 ADCSRA|=(1<<ADIF);
 return ADCH;
 }`;
     } else {
       return `${vrefLine}
-// Read the AD conversion result
+// Blocking read, returns the full 10-bit conversion result
 unsigned int read_adc(unsigned char adc_input)
 {
 ADMUX=adc_input | ADC_VREF_TYPE;
-// Delay needed for the stabilization of the ADC input voltage
+// let the input settle before sampling
 delay_us(10);
-// Start the AD conversion
+// kick off a conversion
 ADCSRA|=(1<<ADSC);
-// Wait for the AD conversion to complete
+// spin until it's done
 while ((ADCSRA & (1<<ADIF))==0);
 ADCSRA|=(1<<ADIF);
 return ADCW;
@@ -87,20 +86,18 @@ return ADCW;
   if (config.noiseCanceler) {
     return `unsigned char adc_data;
 ${vrefLine}
-// ADC interrupt service routine
+// ADC conversion-complete handler
 interrupt [ADC_INT] void adc_isr(void)
 {
-// Read the 8 most significant bits
-// of the AD conversion result
+// stash the top 8 bits of the result
 adc_data=ADCH;
 }
-// Read the 8 most significant bits
-// of the AD conversion result
-// with noise canceling
+// Puts the MCU into ADC noise-reduction sleep while converting,
+// then returns the top 8 bits once the ISR above fires
 unsigned char read_adc(unsigned char adc_input)
 {
 ADMUX=adc_input | ADC_VREF_TYPE;
-// Delay needed for the stabilization of the ADC input voltage
+// let the input settle before sampling
 delay_us(10);
 #asm
     in   r30,mcucr
@@ -116,12 +113,11 @@ return adc_data;
   }
 
   return `${vrefLine}
-// ADC interrupt service routine
+// ADC conversion-complete handler
 interrupt [ADC_INT] void adc_isr(void)
 {
 unsigned char adc_data;
-// Read the 8 most significant bits
-// of the AD conversion result
+// top 8 bits of the result
 adc_data=ADCH;
 // Place your code here
 }`;
@@ -139,15 +135,14 @@ export function generateADCInit(config: ADCConfig, clockHz: number): string {
   const trigStr = config.triggerSource.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 
   const lines = [
-    `// ADC initialization`,
-    `// ADC Clock frequency: ${actual.toFixed(3)} kHz`,
-    `// ADC Voltage Reference: ${vrefStr}`,
-    `// ADC Auto Trigger Source: ${config.triggerSource === "stopped" ? "ADC Stopped" : trigStr}`,
+    `// --- ADC ---`,
+    `// Sample clock: ${actual.toFixed(3)} kHz`,
+    `// Voltage reference: ${vrefStr}`,
+    `// Auto-trigger source: ${config.triggerSource === "stopped" ? "none (software-triggered only)" : trigStr}`,
   ];
 
   if (config.use8bit) {
-    lines.push(`// Only the 8 most significant bits of`);
-    lines.push(`// the AD conversion result are used`);
+    lines.push(`// Left-adjusted result — only the top 8 bits (ADCH) are meaningful`);
   }
 
   lines.push(`ADMUX=ADC_VREF_TYPE;`);

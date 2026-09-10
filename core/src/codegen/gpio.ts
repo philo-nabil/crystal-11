@@ -29,16 +29,16 @@ function generatePortInit(portLetter: string, pins: PinConfig[]): string {
   }).join(" ");
 
   return [
-    `// Port ${portLetter} initialization`,
-    `// Function: ${dirComment} `,
+    `// --- Port ${portLetter} ---`,
+    `// Direction (1 = output, 0 = input), bit7..bit0: ${dirComment}`,
     `DDR${portLetter}=${dirBits};`,
-    `// State: ${stateComment} `,
+    `// Output level, or input pull-up/tristate, bit7..bit0: ${stateComment}`,
     `PORT${portLetter}=${stateBits};`,
   ].join("\n");
 }
 
 export function generateGPIO(config: PortConfig): string {
-  const lines: string[] = ["// Input/Output Ports initialization"];
+  const lines: string[] = ["// --- GPIO setup ---"];
 
   for (const port of PORTS) {
     const pins = config[port] ?? Array(8).fill(defaultPin());

@@ -22,7 +22,7 @@ export function generateSPIInit(config: SPIConfig): string {
   const dord = config.dataOrder === "lsb" ? 1 : 0;
   const spie = config.interrupt ? 1 : 0;
 
-  const preamble = config.interrupt ? `// SPI interrupt service routine
+  const preamble = config.interrupt ? `// SPI transfer-complete handler
 interrupt [SPI_STC] void spi_isr(void)
 {
 // Place your code here
@@ -31,12 +31,12 @@ interrupt [SPI_STC] void spi_isr(void)
 ` : "";
 
   const init = [
-    `// SPI initialization`,
-    `// SPI Type: ${config.mode === "master" ? "Master" : "Slave"}`,
-    `// SPI Clock Rate: ${clk.label}`,
-    `// SPI Clock Phase: ${cpol === 0 ? "Cycle Half" : "Cycle End"}`,
-    `// SPI Clock Polarity: Low`,
-    `// SPI Data Order: ${config.dataOrder === "msb" ? "MSB" : "LSB"} First`,
+    `// --- SPI ---`,
+    `// Role: ${config.mode === "master" ? "Master" : "Slave"}`,
+    `// Clock rate: ${clk.label}`,
+    `// Clock phase (CPHA): ${cpha === 0 ? "sample leading edge" : "sample trailing edge"}`,
+    `// Clock idle level (CPOL): ${cpol === 0 ? "low" : "high"}`,
+    `// Bit order: ${config.dataOrder === "msb" ? "MSB" : "LSB"} first`,
     `SPCR=(${spie}<<SPIE) | (1<<SPE) | (${dord}<<DORD) | (${mstr}<<MSTR) | (${cpol}<<CPOL) | (${cpha}<<CPHA) | (${clk.spr1}<<SPR1) | (${clk.spr0}<<SPR0);`,
     `SPSR=(${clk.spi2x}<<SPI2X);`,
   ].join("\n");
@@ -58,7 +58,7 @@ export function generateI2CInit(config: I2CConfig, clockHz: number): string {
   const gcre = config.generalCallRecognition ? 1 : 0;
   const twie = config.interrupt ? 1 : 0;
 
-  const preamble = config.interrupt ? `// Two Wire Interface interrupt service routine
+  const preamble = config.interrupt ? `// I2C (TWI) event handler
 interrupt [TWI_INT] void twi_isr(void)
 {
 // Place your code here
@@ -67,15 +67,15 @@ interrupt [TWI_INT] void twi_isr(void)
 ` : "";
 
   const init = [
-    `// Two Wire Interface initialization`,
-    `// Generate Acknowledge Pulse: On`,
-    `// TWI Slave Address: 0x${slaveAddr.toString(16).padStart(2, "0").toUpperCase()}`,
-    `// TWI General Call Recognition: ${config.generalCallRecognition ? "On" : "Off"}`,
-    `// TWI Clock frequency: ${config.bitRateKHz} kHz`,
+    `// --- I2C (TWI) ---`,
+    `// ACK: sent automatically on received bytes`,
+    `// Slave address: 0x${slaveAddr.toString(16).padStart(2, "0").toUpperCase()}`,
+    `// Responds to general call: ${config.generalCallRecognition ? "yes" : "no"}`,
+    `// Bus speed: ${config.bitRateKHz} kHz`,
     `TWSR=0x00;`,
     `TWAR=(0x${slaveAddr.toString(16).padStart(2, "0").toUpperCase()}<<1) | (${gcre}<<TWGCE);`,
     `TWBR=0x${twbrHex};`,
-    `TWCR=(${twie}<<TWIE) | (0<<TWEN) | (0<<TWSTO) | (0<<TWSTA) | (0<<TWEA) | (0<<TWINT);`,
+    `TWCR=(${twie}<<TWIE) | (1<<TWEN) | (0<<TWSTO) | (0<<TWSTA) | (0<<TWEA) | (0<<TWINT);`,
   ].join("\n");
 
   return preamble + init;

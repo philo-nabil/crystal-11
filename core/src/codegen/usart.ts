@@ -13,7 +13,11 @@ function ucsrcBits(config: USARTConfig): string {
   const usbs = config.stopBits === 2 ? 1 : 0;
   const ucsz1 = config.dataBits >= 7 ? 1 : 0;
   const ucsz0 = (config.dataBits === 6 || config.dataBits === 8 || config.dataBits === 9) ? 1 : 0;
-  const ucpol = (config.mode !== "async") ? 1 : 0;
+  // UCPOL only matters in synchronous mode. The mode name's suffix
+  // (cpol0/cpol1) selects the bit — previously this only checked
+  // sync-vs-async, so sync_master_cpol0 and sync_slave_cpol0 incorrectly
+  // got UCPOL=1 along with the cpol1 variants.
+  const ucpol = config.mode.endsWith("cpol1") ? 1 : 0;
 
   return `(1<<URSEL) | (${umsel}<<UMSEL) | (${upm1}<<UPM1) | (${upm0}<<UPM0) | (${usbs}<<USBS) | (${ucsz1}<<UCSZ1) | (${ucsz0}<<UCSZ0) | (${ucpol}<<UCPOL)`;
 }
@@ -25,7 +29,7 @@ function generateRxBuffer(): string {
 #define PARITY_ERROR (1<<UPE)
 #define DATA_OVERRUN (1<<DOR)
 
-// USART Receiver buffer
+// Receive ring buffer
 #define RX_BUFFER_SIZE 8
 char rx_buffer[RX_BUFFER_SIZE];
 
@@ -41,10 +45,10 @@ unsigned char rx_counter=0;
 unsigned int rx_counter=0;
 #endif
 
-// This flag is set on USART Receiver buffer overflow
+// set when a byte arrives with nowhere to go
 bit rx_buffer_overflow;
 
-// USART Receiver interrupt service routine
+// USART receive-complete handler
 interrupt [USART_RXC] void usart_rx_isr(void)
 {
 char status,data;
@@ -87,7 +91,7 @@ return data;
 }
 
 function generateTxBuffer(): string {
-  return `// USART Transmitter buffer
+  return `// Transmit ring buffer
 #define TX_BUFFER_SIZE 8
 char tx_buffer[TX_BUFFER_SIZE];
 
@@ -103,7 +107,7 @@ unsigned char tx_counter=0;
 unsigned int tx_counter=0;
 #endif
 
-// USART Transmitter interrupt service routine
+// USART transmit-complete handler — sends the next buffered byte, if any
 interrupt [USART_TXC] void usart_tx_isr(void)
 {
 if (tx_counter)
@@ -143,11 +147,13 @@ export function generateUSARTPreamble(config: USARTConfig): string {
   const parts: string[] = [];
   if (config.rxInterrupt) parts.push(generateRxBuffer());
   if (config.txInterrupt) parts.push(generateTxBuffer());
-  if (!config.rxInterrupt && (config.receiver || config.transmitter)) {
-    parts.push(`// Standard Input/Output functions\n#include <stdio.h>`);
-  }
-  if (config.rxInterrupt || config.txInterrupt) {
-    parts.push(`// Standard Input/Output functions\n#include <stdio.h>`);
+  // stdio.h is needed once, for either interrupt-driven or polled I/O —
+  // previously these were two separate checks with overlapping conditions
+  // (e.g. rxInterrupt=false, txInterrupt=true, receiver=true would hit both),
+  // producing the same #include block twice.
+  const needsStdio = config.rxInterrupt || config.txInterrupt || config.receiver || config.transmitter;
+  if (needsStdio) {
+    parts.push(`// Wire up getchar/putchar for printf-style I/O\n#include <stdio.h>`);
   }
   return parts.join("\n\n");
 }
@@ -163,16 +169,15 @@ export function generateUSARTInit(config: USARTConfig, clockHz: number): string 
   const txen = config.transmitter ? 1 : 0;
   const ucsz2 = config.dataBits === 9 ? 1 : 0;
 
-  const modeStr = config.mode === "async" ? "Asynchronous" : "Synchronous";
-  const parityStr = config.parity === "none" ? "No Parity" : config.parity === "even" ? "Even Parity" : "Odd Parity";
+  const modeStr = config.mode === "async" ? "asynchronous" : "synchronous";
+  const parityStr = config.parity === "none" ? "no parity" : config.parity === "even" ? "even parity" : "odd parity";
 
   return [
-    `// USART initialization`,
-    `// Communication Parameters: ${config.dataBits} Data, ${config.stopBits} Stop, ${parityStr}`,
-    `// USART Receiver: ${config.receiver ? "On" : "Off"}`,
-    `// USART Transmitter: ${config.transmitter ? "On" : "Off"}`,
-    `// USART Mode: ${modeStr}`,
-    `// USART Baud Rate: ${config.baudRate}`,
+    `// --- USART ---`,
+    `// Frame: ${config.dataBits} data bits, ${config.stopBits} stop bit(s), ${parityStr}`,
+    `// RX: ${config.receiver ? "on" : "off"}, TX: ${config.transmitter ? "on" : "off"}`,
+    `// Mode: ${modeStr}`,
+    `// Baud rate: ${config.baudRate}`,
     `UCSRA=(0<<RXC) | (0<<TXC) | (0<<UDRE) | (0<<FE) | (0<<DOR) | (0<<UPE) | (0<<U2X) | (0<<MPCM);`,
     `UCSRB=(${rxcie}<<RXCIE) | (${txcie}<<TXCIE) | (0<<UDRIE) | (${rxen}<<RXEN) | (${txen}<<TXEN) | (${ucsz2}<<UCSZ2) | (0<<RXB8) | (0<<TXB8);`,
     `UCSRC=${ucsrcBits(config)};`,

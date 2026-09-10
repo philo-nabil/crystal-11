@@ -7,7 +7,7 @@ const TRIGGER_ISC: Record<string, { bit1: number; bit0: number; label: string }>
   rising:     { bit1: 1, bit0: 1, label: "Rising Edge"  },
 };
 
-export function generateExternalInterruptsInit(config: ExternalInterruptConfig): string {
+export function generateExternalInterruptsInit(config: ExternalInterruptConfig): { isr: string; init: string } {
   const int0 = config.int0;
   const int1 = config.int1;
   const int2 = config.int2;
@@ -27,21 +27,21 @@ export function generateExternalInterruptsInit(config: ExternalInterruptConfig):
 
   const isrs: string[] = [];
   if (int0?.enabled) {
-    isrs.push(`// External Interrupt 0 service routine
+    isrs.push(`// INT0 handler
 interrupt [EXT_INT0] void ext_int0_isr(void)
 {
 // Place your code here
 }`);
   }
   if (int1?.enabled) {
-    isrs.push(`// External Interrupt 1 service routine
+    isrs.push(`// INT1 handler
 interrupt [EXT_INT1] void ext_int1_isr(void)
 {
 // Place your code here
 }`);
   }
   if (int2?.enabled) {
-    isrs.push(`// External Interrupt 2 service routine
+    isrs.push(`// INT2 handler
 interrupt [EXT_INT2] void ext_int2_isr(void)
 {
 // Place your code here
@@ -49,15 +49,15 @@ interrupt [EXT_INT2] void ext_int2_isr(void)
   }
 
   const init = [
-    `// External Interrupt(s) initialization`,
-    `// INT0: ${int0?.enabled ? `On (${TRIGGER_ISC[int0.trigger].label})` : "Off"}`,
-    `// INT1: ${int1?.enabled ? `On (${TRIGGER_ISC[int1.trigger].label})` : "Off"}`,
-    `// INT2: ${int2?.enabled ? `On (${int2.trigger === "rising" ? "Rising" : "Falling"} Edge)` : "Off"}`,
+    `// --- External interrupts ---`,
+    `// INT0: ${int0?.enabled ? `enabled, ${TRIGGER_ISC[int0.trigger].label}` : "disabled"}`,
+    `// INT1: ${int1?.enabled ? `enabled, ${TRIGGER_ISC[int1.trigger].label}` : "disabled"}`,
+    `// INT2: ${int2?.enabled ? `enabled, ${int2.trigger === "rising" ? "rising" : "falling"} edge` : "disabled"}`,
     `MCUCR=(${isc11}<<ISC11) | (${isc10}<<ISC10) | (${isc01}<<ISC01) | (${isc00}<<ISC00);`,
     `MCUCSR=(${isc2}<<ISC2);`,
     `GICR=(${int1en}<<INT1) | (${int0en}<<INT0) | (${int2en}<<INT2);`,
     `GIFR=(0<<INTF1) | (0<<INTF0) | (0<<INTF2);`,
   ].join("\n");
 
-  return (isrs.length > 0 ? isrs.join("\n\n") + "\n\n" : "") + init;
+  return { isr: isrs.join("\n\n"), init };
 }
