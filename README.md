@@ -98,10 +98,10 @@ avrdude -p m32 -c arduino -P COM3 -b 19200 -U flash:w:output.hex:i
 
 | Component | Status |
 |---|---|
-| Core codegen | in progress |
-| VS Code extension | planned |
+| Core codegen | working (ATmega32A) |
+| VS Code extension | working — see `vscode-extension/` |
 | CLion plugin | planned |
-| Flash integration | planned |
+| Flash integration | working (avrdude, VS Code) |
 
 ---
 

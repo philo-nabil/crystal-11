@@ -5,6 +5,7 @@
     "target": "ES2022",
     "lib": ["ES2022"],
     "outDir": "out",
+    "rootDir": "..",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -13,6 +14,7 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "sourceMap": true,
+    "types": ["node"],
     "paths": {
       "crystal-11-core":   ["../core/src/index"],
       "crystal-11-core/*": ["../core/src/*"]

@@ -40,6 +40,7 @@ export class WizardPanel {
         // reconstructed from the form on re-open.
         localResourceRoots: [
           vscode.Uri.joinPath(context.extensionUri, "media"),
+          vscode.Uri.joinPath(context.extensionUri, "images"),
         ],
       }
     );
@@ -272,6 +273,12 @@ export class WizardPanel {
       vscode.Uri.joinPath(this._extensionUri, "media", "style.css")
     );
 
+    // Uni logo shown in the sidebar credit block — same safe loading pattern
+    // as styleUri above.
+    const logoUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "images", "uni-logo.png")
+    );
+
     // Escape values inserted into the CSP string — a semicolon or space in
     // cspSource could inject arbitrary CSP directives.
     const esc = (s: string): string =>
@@ -294,11 +301,12 @@ export class WizardPanel {
     this._panel.webview.html = this._buildHtml(
       nonce,
       esc(csp),
-      esc(styleUri.toString())
+      esc(styleUri.toString()),
+      esc(logoUri.toString())
     );
   }
 
-  private _buildHtml(nonce: string, csp: string, styleUri: string): string {
+  private _buildHtml(nonce: string, csp: string, styleUri: string, logoUri: string): string {
     // bodyContent is a hardcoded string — no user data flows in here.
     // acquireVsCodeApi() is called inside the nonced <script> tag below.
     return `<!DOCTYPE html>
@@ -313,6 +321,12 @@ export class WizardPanel {
 <body>
 
 <nav class="sidebar">
+  <div class="sidebar-brand">
+    <img src="${logoUri}" alt="Alexandria National University" class="sidebar-brand-logo">
+    <div class="sidebar-brand-text">
+      Made with care by an ANU student, for fellow ATmega32A students everywhere.
+    </div>
+  </div>
   <div class="sidebar-item active" data-panel="chip" data-action="nav"><span class="dot"></span> Chip</div>
   <div class="sidebar-item" data-panel="ports" data-action="nav"><span class="dot"></span> Ports</div>
   <div class="sidebar-item" data-panel="usart" data-action="nav"><span class="dot"></span> USART</div>

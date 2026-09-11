@@ -69,7 +69,7 @@ export async function flashDevice(hexPath: string): Promise<void> {
 
   // Also run programmatically to capture errors
   try {
-    const { stdout, stderr } = await execFileAsync("avrdude", args);
+    const { stderr } = await execFileAsync("avrdude", args);
     if (stderr && !stderr.includes("bytes of flash verified")) {
       vscode.window.showWarningMessage(`avrdude: ${stderr.trim().split("\n")[0]}`);
     } else {
@@ -80,4 +80,3 @@ export async function flashDevice(hexPath: string): Promise<void> {
     vscode.window.showErrorMessage(`crystal-11: Flash failed — ${msg}`);
   }
 }
-

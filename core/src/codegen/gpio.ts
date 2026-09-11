@@ -1,4 +1,4 @@
-import { PortConfig, PinConfig } from "./types";
+import { PortConfig, PinConfig } from "../types";
 
 const PORTS = ["A", "B", "C", "D"] as const;
 
@@ -22,11 +22,21 @@ function generatePortInit(portLetter: string, pins: PinConfig[]): string {
   const dirBits = padded.map((p, i) => `(${pinDirection(p)}<<DD${portLetter}${i})`).reverse().join(" | ");
   const stateBits = padded.map((p, i) => `(${pinState(p)}<<PORT${portLetter}${i})`).reverse().join(" | ");
 
-  const dirComment = padded.map((p, i) => `Bit${7 - i}=${p.mode === "out" ? "Out" : "In"}`).join(" ");
-  const stateComment = padded.map((p, i) => {
-    if (p.mode === "out") return `Bit${7 - i}=${p.state === "high" ? "1" : "0"}`;
-    return `Bit${7 - i}=${p.state === "pullup" ? "P" : "T"}`;
-  }).join(" ");
+  // Comments list Bit7..Bit0 (descending), matching the register-term order
+  // above. Iterate a reversed copy so the label always matches the pin it
+  // describes — mapping "7 - i" straight over the unreversed array (as this
+  // function did before) silently swaps every pin's label with its mirror bit.
+  const reversedForComment = [...padded].reverse();
+  const dirComment = reversedForComment
+    .map((p, revIdx) => `Bit${7 - revIdx}=${p.mode === "out" ? "Out" : "In"}`)
+    .join(" ");
+  const stateComment = reversedForComment
+    .map((p, revIdx) => {
+      const bit = 7 - revIdx;
+      if (p.mode === "out") return `Bit${bit}=${p.state === "high" ? "1" : "0"}`;
+      return `Bit${bit}=${p.state === "pullup" ? "P" : "T"}`;
+    })
+    .join(" ");
 
   return [
     `// --- Port ${portLetter} ---`,

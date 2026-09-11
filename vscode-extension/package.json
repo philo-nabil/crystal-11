@@ -4,12 +4,26 @@
   "description": "AVR peripheral init code generator for ATmega32A",
   "version": "0.1.0",
   "publisher": "philo-nabil",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/philo-nabil/crystal-11"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "icon": "images/icon.png",
-  "categories": ["Other"],
-  "keywords": ["AVR", "ATmega32A", "embedded", "microcontroller", "wizard"],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "AVR",
+    "ATmega32A",
+    "embedded",
+    "microcontroller",
+    "wizard"
+  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -33,7 +47,7 @@
     "viewsWelcome": [
       {
         "view": "crystal11.welcomeView",
-        "contents": "ATmega32A peripheral init code generator.\n\n[Open Code Wizard](command:crystal11.openWizard)"
+        "contents": "ATmega32A peripheral init code generator.\n\nIndependent student project — not made or endorsed by Alexandria National University. Built by Philo Nabil to help fellow students.\n\n[Open Code Wizard](command:crystal11.openWizard)\n\nAlready have a project?\n\n[Pick a Folder](command:vscode.openFolder)\n\n[Create New Project](command:crystal11.openWizard)"
       }
     ],
     "commands": [
@@ -70,11 +84,6 @@
           "default": "",
           "description": "Path to avr-gcc binary. Leave empty to auto-detect from common install locations (Homebrew, apt, WinAVR)."
         },
-        "crystal11.compilerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to avr-gcc binary. Leave empty to auto-detect from PATH and common install locations."
-        },
         "crystal11.avrdudePort": {
           "type": "string",
           "default": "usb",
@@ -83,7 +92,12 @@
         "crystal11.programmer": {
           "type": "string",
           "default": "usbasp",
-          "enum": ["usbasp", "avrispmkII", "arduino", "stk500"],
+          "enum": [
+            "usbasp",
+            "avrispmkII",
+            "arduino",
+            "stk500"
+          ],
           "description": "ISP programmer type"
         },
         "crystal11.avrdudeExtra": {
@@ -95,7 +109,8 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm audit && npm run package",
+    "vscode:prepublish": "npm run package",
+    "audit": "npm audit",
     "compile": "node esbuild.js",
     "package": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
@@ -105,8 +120,8 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "1.85.0",
     "@types/node": "20.11.5",
+    "@types/vscode": "1.85.0",
     "@typescript-eslint/eslint-plugin": "7.2.0",
     "@typescript-eslint/parser": "7.2.0",
     "@vscode/test-cli": "0.0.6",
@@ -114,5 +129,8 @@
     "esbuild": "0.20.2",
     "eslint": "8.57.0",
     "typescript": "5.4.5"
+  },
+  "dependencies": {
+    "fresh": "^0.5.2"
   }
 }

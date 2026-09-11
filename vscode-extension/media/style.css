@@ -4,6 +4,15 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+:root {
+  /* crystal-11 brand accent — VEX Robotics blue. Used only for elements
+     that represent the tool's own identity (active states, primary
+     action); everything else still follows the user's VS Code theme. */
+  --crystal-accent: #1f6feb;
+  --crystal-accent-hover: #1a5fc9;
+  --crystal-accent-fg: #ffffff;
+}
+
 body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
@@ -24,6 +33,25 @@ body {
   padding: 8px 0;
 }
 
+.sidebar-brand {
+  padding: 12px 16px 14px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  text-align: center;
+}
+.sidebar-brand-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: block;
+  margin: 0 auto 8px;
+}
+.sidebar-brand-text {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--vscode-descriptionForeground);
+}
+
 .sidebar-item {
   padding: 8px 16px;
   cursor: pointer;
@@ -37,8 +65,8 @@ body {
 .sidebar-item:hover { opacity: 1; background: var(--vscode-list-hoverBackground); }
 .sidebar-item.active {
   opacity: 1;
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--crystal-accent);
+  color: var(--crystal-accent-fg);
 }
 .sidebar-item .dot {
   width: 8px; height: 8px;
@@ -105,7 +133,7 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
   margin-bottom: 10px;
   cursor: pointer;
 }
-.checkbox-row input { cursor: pointer; width: 14px; height: 14px; }
+.checkbox-row input { cursor: pointer; width: 14px; height: 14px; accent-color: var(--crystal-accent); }
 
 .row { display: flex; gap: 24px; flex-wrap: wrap; }
 .row .field { flex: 1; min-width: 180px; }
@@ -113,7 +141,8 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
 /* ── Ports layout ── */
 .ports-layout {
   display: flex;
-  gap: 24px;
+  flex-direction: column;
+  gap: 20px;
   align-items: flex-start;
 }
 
@@ -146,9 +175,9 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
 }
 
 .port-tab.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
-  border-bottom-color: var(--vscode-list-activeSelectionBackground);
+  background: var(--crystal-accent);
+  color: var(--crystal-accent-fg);
+  border-bottom-color: var(--crystal-accent);
 }
 
 /* Pin table */
@@ -290,10 +319,10 @@ button {
   font-size: inherit;
 }
 .btn-primary {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--crystal-accent);
+  color: var(--crystal-accent-fg);
 }
-.btn-primary:hover { background: var(--vscode-button-hoverBackground); }
+.btn-primary:hover { background: var(--crystal-accent-hover); }
 .btn-secondary {
   background: var(--vscode-button-secondaryBackground);
   color: var(--vscode-button-secondaryForeground);

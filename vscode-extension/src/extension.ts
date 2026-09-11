@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { WizardPanel } from "./wizardPanel";
 import { flashDevice } from "./flashCommand";
+import { resolveToolchain, getInstallGuide } from "./utils/toolchain";
 
 export function activate(context: vscode.ExtensionContext): void {
 
@@ -12,6 +13,38 @@ export function activate(context: vscode.ExtensionContext): void {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`crystal-11: Failed to open wizard — ${msg}`);
+      }
+    })
+  );
+
+  // Check avr-gcc installation — package.json declares this command but it
+  // was never registered, so running it from the command palette failed
+  // with "command not found."
+  context.subscriptions.push(
+    vscode.commands.registerCommand("crystal11.checkCompiler", async () => {
+      const toolchain = await resolveToolchain();
+      if (toolchain) {
+        const src = toolchain.source === "setting" ? "from your settings" : "auto-detected";
+        vscode.window.showInformationMessage(
+          `crystal-11: avr-gcc found (${src}) → ${toolchain.gccPath}`
+        );
+      } else {
+        const guide = getInstallGuide();
+        const choice = await vscode.window.showErrorMessage(
+          "crystal-11: avr-gcc not found on your system.",
+          "Show Install Instructions",
+          "Set Path Manually"
+        );
+        if (choice === "Show Install Instructions") {
+          vscode.window.showInformationMessage(
+            `Run this in your terminal:\n${guide.command}`,
+            { modal: true, detail: guide.note }
+          );
+        } else if (choice === "Set Path Manually") {
+          await vscode.commands.executeCommand(
+            "workbench.action.openSettings", "crystal11.avrGccPath"
+          );
+        }
       }
     })
   );
