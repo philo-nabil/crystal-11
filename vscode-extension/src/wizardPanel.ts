@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as crypto from "crypto";
+import * as path from "path";
 import { generateCode } from "crystal-11-core";
 import { WizardConfig } from "crystal-11-core/types";
 import { isSafePath } from "./utils/validate";
@@ -244,9 +245,49 @@ export class WizardPanel {
       enc.encode(JSON.stringify(cppProps, null, 2))
     );
 
+    // ── 6b. Write .vscode/tasks.json ──────────────────────────────────────────
+    // Compiles main.c -> main.elf -> main.hex via avr-gcc + avr-objcopy.
+    // Without this, there was no way to turn the generated main.c into
+    // anything flashDevice() could actually flash.
+    const objcopyPath = gccPath.replace(
+      /avr-gcc(\.exe)?$/,
+      process.platform === "win32" ? "avr-objcopy.exe" : "avr-objcopy"
+    );
+
+    const tasksJson = {
+      version: "2.0.0",
+      tasks: [
+        {
+          label: "avr-gcc: build .hex",
+          type: "shell",
+          command: [
+            `"${gccPath}"`,
+            "-mmcu=atmega32a",
+            "-DF_CPU=11059200UL",
+            "-Os",
+            "main.c",
+            "-o", "main.elf",
+            "&&",
+            `"${objcopyPath}"`,
+            "-O", "ihex",
+            "-R", ".eeprom",
+            "main.elf", "main.hex",
+          ].join(" "),
+          group: { kind: "build", isDefault: true },
+          problemMatcher: ["$gcc"],
+          presentation: { reveal: "always", panel: "shared" },
+        },
+      ],
+    };
+
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.joinPath(projectUri, ".vscode", "tasks.json"),
+      enc.encode(JSON.stringify(tasksJson, null, 2))
+    );
+
     // ── 7. Open project ───────────────────────────────────────────────────────
     const note = toolchain
-      ? `avr-gcc found at ${toolchain.gccPath}`
+      ? `avr-gcc found at ${toolchain.gccPath}. Press Cmd/Ctrl+Shift+B to build main.hex.`
       : "⚠️ avr-gcc not found — install it before building";
 
     const choice = await vscode.window.showInformationMessage(
