@@ -2,7 +2,7 @@
   "name": "crystal-11-avr-wizard",
   "displayName": "Crystal 11 AVR Wizard",
   "description": "AVR peripheral init code generator for ATmega32A",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "philo-nabil",
   "license": "MIT",
   "repository": {

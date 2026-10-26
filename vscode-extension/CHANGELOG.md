@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- New extension icon and matching activity bar icon
+- README rewritten to describe exactly what the extension does, with a limitations section
+
 ## 0.2.0
 
 - Generated code now targets avr-gcc + avr-libc (`<avr/io.h>`, `ISR()`, `sei()`), so new projects build out of the box
