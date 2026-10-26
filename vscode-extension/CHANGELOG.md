@@ -3,7 +3,7 @@
 ## 0.2.0
 
 - Generated code now targets avr-gcc + avr-libc (`<avr/io.h>`, `ISR()`, `sei()`), so new projects build out of the box
-- Zero-config toolchain detection: PATH, Homebrew (Intel & Apple Silicon), apt/dnf/pacman, Arduino IDE 1.x/2.x, Microchip Studio, WinAVR, Scoop
+- Automatic toolchain detection: PATH, Homebrew (Intel & Apple Silicon), apt/dnf/pacman, Arduino IDE 1.x/2.x, Microchip Studio, WinAVR, Scoop
 - Projects repair their own config when opened on another computer or after installing avr-gcc
 - Build task works on Windows (no shell, paths with spaces OK); IntelliSense config no longer reports errors
 - avrdude is found automatically for flashing (new `crystal11.avrdudePath` setting to override); flashing no longer runs avrdude twice
