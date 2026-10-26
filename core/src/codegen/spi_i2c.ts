@@ -22,15 +22,9 @@ export function generateSPIInit(config: SPIConfig): string {
   const dord = config.dataOrder === "lsb" ? 1 : 0;
   const spie = config.interrupt ? 1 : 0;
 
-  const preamble = config.interrupt ? `// SPI transfer-complete handler
-interrupt [SPI_STC] void spi_isr(void)
-{
-// Place your code here
-}
-
-` : "";
-
-  const init = [
+  // The SPI ISR is emitted at file scope by index.ts. It used to be prepended
+  // here too, which put a second copy of the handler inside main().
+  return [
     `// --- SPI ---`,
     `// Role: ${config.mode === "master" ? "Master" : "Slave"}`,
     `// Clock rate: ${clk.label}`,
@@ -40,8 +34,6 @@ interrupt [SPI_STC] void spi_isr(void)
     `SPCR=(${spie}<<SPIE) | (1<<SPE) | (${dord}<<DORD) | (${mstr}<<MSTR) | (${cpol}<<CPOL) | (${cpha}<<CPHA) | (${clk.spr1}<<SPR1) | (${clk.spr0}<<SPR0);`,
     `SPSR=(${clk.spi2x}<<SPI2X);`,
   ].join("\n");
-
-  return preamble + init;
 }
 
 // ─── I2C (TWI) ───────────────────────────────────────────────────────────────
@@ -58,25 +50,17 @@ export function generateI2CInit(config: I2CConfig, clockHz: number): string {
   const gcre = config.generalCallRecognition ? 1 : 0;
   const twie = config.interrupt ? 1 : 0;
 
-  const preamble = config.interrupt ? `// I2C (TWI) event handler
-interrupt [TWI_INT] void twi_isr(void)
-{
-// Place your code here
-}
-
-` : "";
-
-  const init = [
+  // The TWI ISR is emitted at file scope by index.ts (see generateSPIInit).
+  return [
     `// --- I2C (TWI) ---`,
     `// ACK: sent automatically on received bytes`,
     `// Slave address: 0x${slaveAddr.toString(16).padStart(2, "0").toUpperCase()}`,
     `// Responds to general call: ${config.generalCallRecognition ? "yes" : "no"}`,
     `// Bus speed: ${config.bitRateKHz} kHz`,
     `TWSR=0x00;`,
-    `TWAR=(0x${slaveAddr.toString(16).padStart(2, "0").toUpperCase()}<<1) | (${gcre}<<TWGCE);`,
+    // avr-libc's iom32a.h doesn't name the TWAR bits; bit 0 is TWGCE.
+    `TWAR=(0x${slaveAddr.toString(16).padStart(2, "0").toUpperCase()}<<1) | ${gcre}; // bit0 = TWGCE`,
     `TWBR=0x${twbrHex};`,
-    `TWCR=(${twie}<<TWIE) | (1<<TWEN) | (0<<TWSTO) | (0<<TWSTA) | (0<<TWEA) | (0<<TWINT);`,
+    `TWCR=(${twie}<<TWIE) | (1<<TWEN) | (0<<TWSTO) | (0<<TWSTA) | (1<<TWEA) | (0<<TWINT);`,
   ].join("\n");
-
-  return preamble + init;
 }

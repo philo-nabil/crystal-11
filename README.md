@@ -24,7 +24,7 @@ No CodeVision. No Windows requirement. No license fee.
 ## What it does
 
 - Peripheral init wizard (GPIO, USART, ADC, Timers, SPI, I2C, External Interrupts)
-- Generates C code identical in structure to what CodeVision produces
+- Generates C init code laid out like CodeVision's, but for avr-gcc + avr-libc (`<avr/io.h>`, `ISR()`), so it builds with the free toolchain
 - ISP flash integration via avrdude — flash directly from VS Code or CLion
 - Currently targets the ATmega32A
 

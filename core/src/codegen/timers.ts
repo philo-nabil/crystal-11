@@ -1,5 +1,12 @@
 import { Timer0Config, Timer1Config, Timer2Config } from "../types";
 
+function clockComment(prescaler: string): string {
+  if (prescaler === "off") return "stopped";
+  if (prescaler === "ext_falling") return "external pin, falling edge";
+  if (prescaler === "ext_rising") return "external pin, rising edge";
+  return `system clock / ${prescaler}`;
+}
+
 // ─── TIMER 0 ─────────────────────────────────────────────────────────────────
 
 const T0_PRESCALER: Record<string, string> = {
@@ -23,21 +30,16 @@ const T0_MODE: Record<string, { wgm01: number; wgm00: number; label: string }> =
 export function generateTimer0Init(config: Timer0Config): string {
   const mode = T0_MODE[config.mode];
   const prescaler = T0_PRESCALER[config.prescaler];
-  const toie = config.overflowInterrupt ? 1 : 0;
-  const ocie = config.compareInterrupt ? 1 : 0;
   const ocr = config.compareValue ?? 0;
 
   return [
     `// --- Timer 0 ---`,
-    `// Clock: ${config.prescaler === "off" ? "stopped" : `system clock / ${config.prescaler}`}`,
+    `// Clock: ${clockComment(config.prescaler)}`,
     `// Waveform mode: ${mode.label}`,
     `// OC0 pin: not connected`,
     `TCCR0=(${mode.wgm00}<<WGM00) | (0<<COM01) | (0<<COM00) | (${mode.wgm01}<<WGM01) | ${prescaler};`,
     `TCNT0=0x00;`,
     `OCR0=0x${ocr.toString(16).padStart(2, "0").toUpperCase()};`,
-    ``,
-    `// Timer 0 interrupts`,
-    `TIMSK=(0<<OCIE2) | (0<<TOIE2) | (0<<TICIE1) | (0<<OCIE1A) | (0<<OCIE1B) | (0<<TOIE1) | (${ocie}<<OCIE0) | (${toie}<<TOIE0);`,
   ].join("\n");
 }
 
@@ -74,17 +76,13 @@ const T1_MODE: Record<string, { wgm13: number; wgm12: number; wgm11: number; wgm
 export function generateTimer1Init(config: Timer1Config): string {
   const mode = T1_MODE[config.mode];
   const prescaler = T1_PRESCALER[config.prescaler];
-  const toie = config.overflowInterrupt ? 1 : 0;
-  const ocieA = config.compareAInterrupt ? 1 : 0;
-  const ocieB = config.compareBInterrupt ? 1 : 0;
-  const ticie = config.captureInterrupt ? 1 : 0;
   const ocrA = config.compareA ?? 0;
   const ocrB = config.compareB ?? 0;
   const icr = config.inputCapture ?? 0;
 
   return [
     `// --- Timer 1 ---`,
-    `// Clock: ${config.prescaler === "off" ? "stopped" : `system clock / ${config.prescaler}`}`,
+    `// Clock: ${clockComment(config.prescaler)}`,
     `// Waveform mode: ${mode.label}`,
     `// OC1A / OC1B pins: not connected`,
     `// Input capture noise canceler: off, triggers on falling edge`,
@@ -102,9 +100,6 @@ export function generateTimer1Init(config: Timer1Config): string {
     `OCR1AL=0x${(ocrA % 256).toString(16).padStart(2, "0").toUpperCase()};`,
     `OCR1BH=0x${Math.floor(ocrB / 256).toString(16).padStart(2, "0").toUpperCase()};`,
     `OCR1BL=0x${(ocrB % 256).toString(16).padStart(2, "0").toUpperCase()};`,
-    ``,
-    `// Timer 1 interrupts`,
-    `TIMSK=(0<<OCIE2) | (0<<TOIE2) | (${ticie}<<TICIE1) | (${ocieA}<<OCIE1A) | (${ocieB}<<OCIE1B) | (${toie}<<TOIE1) | (0<<OCIE0) | (0<<TOIE0);`,
   ].join("\n");
 }
 
@@ -121,32 +116,44 @@ const T2_PRESCALER: Record<string, string> = {
   "1024": "(1<<CS22) | (1<<CS21) | (1<<CS20)",
 };
 
-const T2_MODE: Record<string, { pwm2: number; wgm21: number; wgm20: number; label: string }> = {
-  normal:            { pwm2: 0, wgm21: 0, wgm20: 0, label: "Normal top=FFh" },
-  phase_correct_pwm: { pwm2: 1, wgm21: 0, wgm20: 1, label: "Phase correct PWM top=FFh" },
-  ctc:               { pwm2: 0, wgm21: 1, wgm20: 0, label: "CTC top=OCR2" },
-  fast_pwm:          { pwm2: 1, wgm21: 1, wgm20: 1, label: "Fast PWM top=FFh" },
+const T2_MODE: Record<string, { wgm21: number; wgm20: number; label: string }> = {
+  normal:            { wgm21: 0, wgm20: 0, label: "Normal top=FFh" },
+  phase_correct_pwm: { wgm21: 0, wgm20: 1, label: "Phase correct PWM top=FFh" },
+  ctc:               { wgm21: 1, wgm20: 0, label: "CTC top=OCR2" },
+  fast_pwm:          { wgm21: 1, wgm20: 1, label: "Fast PWM top=FFh" },
 };
 
 export function generateTimer2Init(config: Timer2Config): string {
   const mode = T2_MODE[config.mode];
   const prescaler = T2_PRESCALER[config.prescaler];
-  const toie = config.overflowInterrupt ? 1 : 0;
-  const ocie = config.compareInterrupt ? 1 : 0;
   const ocr = config.compareValue ?? 0;
   const async = config.asynchronous ? 1 : 0;
 
   return [
     `// --- Timer 2 ---`,
-    `// Clock: ${config.prescaler === "off" ? "stopped" : `system clock / ${config.prescaler}`}`,
+    `// Clock: ${config.prescaler === "off" ? "stopped" : `${config.asynchronous ? "TOSC1 crystal" : "system clock"} / ${config.prescaler}`}`,
     `// Waveform mode: ${mode.label}`,
     `// OC2 pin: not connected`,
     `ASSR=(${async}<<AS2);`,
-    `TCCR2=(${mode.pwm2}<<PWM2) | (0<<COM21) | (0<<COM20) | (${mode.wgm21}<<CTC2) | (0<<COM2) | ${prescaler};`,
+    `TCCR2=(${mode.wgm20}<<WGM20) | (0<<COM21) | (0<<COM20) | (${mode.wgm21}<<WGM21) | ${prescaler};`,
     `TCNT2=0x00;`,
     `OCR2=0x${ocr.toString(16).padStart(2, "0").toUpperCase()};`,
-    ``,
-    `// Timer 2 interrupts`,
-    `TIMSK=(${ocie}<<OCIE2) | (${toie}<<TOIE2) | (0<<TICIE1) | (0<<OCIE1A) | (0<<OCIE1B) | (0<<TOIE1) | (0<<OCIE0) | (0<<TOIE0);`,
+  ].join("\n");
+}
+
+// ─── TIMSK (shared) ──────────────────────────────────────────────────────────
+
+// All three timers share one TIMSK register. Each timer used to write the
+// whole register itself, so enabling Timer1 or Timer2 silently wiped out the
+// interrupt bits the earlier timer had just set. Emit it once, combined.
+export function generateTimerInterruptsInit(
+  t0?: Timer0Config,
+  t1?: Timer1Config,
+  t2?: Timer2Config,
+): string {
+  const b = (x?: boolean): number => (x ? 1 : 0);
+  return [
+    `// --- Timer interrupts ---`,
+    `TIMSK=(${b(t2?.compareInterrupt)}<<OCIE2) | (${b(t2?.overflowInterrupt)}<<TOIE2) | (${b(t1?.captureInterrupt)}<<TICIE1) | (${b(t1?.compareAInterrupt)}<<OCIE1A) | (${b(t1?.compareBInterrupt)}<<OCIE1B) | (${b(t1?.overflowInterrupt)}<<TOIE1) | (${b(t0?.compareInterrupt)}<<OCIE0) | (${b(t0?.overflowInterrupt)}<<TOIE0);`,
   ].join("\n");
 }

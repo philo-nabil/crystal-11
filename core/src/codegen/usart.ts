@@ -1,8 +1,9 @@
 import { USARTConfig } from "../types";
 
-function calcUBRR(clockHz: number, baud: number, u2x: boolean): number {
-  if (u2x) return Math.round(clockHz / (8 * baud)) - 1;
-  return Math.round(clockHz / (16 * baud)) - 1;
+function calcUBRR(clockHz: number, baud: number, divisor: number): number {
+  // UBRR is 12 bits; out-of-range baud rates used to wrap or go negative.
+  const ubrr = Math.round(clockHz / (divisor * baud)) - 1;
+  return Math.max(0, Math.min(0x0FFF, ubrr));
 }
 
 function ucsrcBits(config: USARTConfig): string {
@@ -22,34 +23,34 @@ function ucsrcBits(config: USARTConfig): string {
   return `(1<<URSEL) | (${umsel}<<UMSEL) | (${upm1}<<UPM1) | (${upm0}<<UPM0) | (${usbs}<<USBS) | (${ucsz1}<<UCSZ1) | (${ucsz0}<<UCSZ0) | (${ucpol}<<UCPOL)`;
 }
 
-function generateRxBuffer(): string {
-  return `#define DATA_REGISTER_EMPTY (1<<UDRE)
+const STATUS_DEFINES = `#define DATA_REGISTER_EMPTY (1<<UDRE)
 #define RX_COMPLETE (1<<RXC)
 #define FRAMING_ERROR (1<<FE)
 #define PARITY_ERROR (1<<UPE)
-#define DATA_OVERRUN (1<<DOR)
+#define DATA_OVERRUN (1<<DOR)`;
 
-// Receive ring buffer
+function generateRxBuffer(): string {
+  return `// Receive ring buffer
 #define RX_BUFFER_SIZE 8
-char rx_buffer[RX_BUFFER_SIZE];
+volatile char rx_buffer[RX_BUFFER_SIZE];
 
 #if RX_BUFFER_SIZE <= 256
-unsigned char rx_wr_index=0,rx_rd_index=0;
+volatile unsigned char rx_wr_index=0,rx_rd_index=0;
 #else
-unsigned int rx_wr_index=0,rx_rd_index=0;
+volatile unsigned int rx_wr_index=0,rx_rd_index=0;
 #endif
 
 #if RX_BUFFER_SIZE < 256
-unsigned char rx_counter=0;
+volatile unsigned char rx_counter=0;
 #else
-unsigned int rx_counter=0;
+volatile unsigned int rx_counter=0;
 #endif
 
 // set when a byte arrives with nowhere to go
-bit rx_buffer_overflow;
+volatile unsigned char rx_buffer_overflow=0;
 
 // USART receive-complete handler
-interrupt [USART_RXC] void usart_rx_isr(void)
+ISR(USART_RXC_vect)
 {
 char status,data;
 status=UCSRA;
@@ -70,45 +71,52 @@ if ((status & (FRAMING_ERROR | PARITY_ERROR | DATA_OVERRUN))==0)
    }
 }
 
-#ifndef _DEBUG_TERMINAL_IO_
-#define _ALTERNATE_GETCHAR_
-#pragma used+
-char getchar(void)
+// Read one byte from the receive buffer (blocks until one arrives)
+static int usart_getchar(FILE *stream)
 {
 char data;
+(void)stream;
 while (rx_counter==0);
 data=rx_buffer[rx_rd_index++];
 #if RX_BUFFER_SIZE != 256
 if (rx_rd_index == RX_BUFFER_SIZE) rx_rd_index=0;
 #endif
-#asm("cli")
+cli();
 --rx_counter;
-#asm("sei")
-return data;
+sei();
+return (unsigned char)data;
+}`;
 }
-#pragma used-
-#endif`;
+
+function generatePolledRx(): string {
+  return `// Read one byte from the USART (polled, blocks until one arrives)
+static int usart_getchar(FILE *stream)
+{
+(void)stream;
+while ((UCSRA & RX_COMPLETE)==0);
+return UDR;
+}`;
 }
 
 function generateTxBuffer(): string {
   return `// Transmit ring buffer
 #define TX_BUFFER_SIZE 8
-char tx_buffer[TX_BUFFER_SIZE];
+volatile char tx_buffer[TX_BUFFER_SIZE];
 
 #if TX_BUFFER_SIZE <= 256
-unsigned char tx_wr_index=0,tx_rd_index=0;
+volatile unsigned char tx_wr_index=0,tx_rd_index=0;
 #else
-unsigned int tx_wr_index=0,tx_rd_index=0;
+volatile unsigned int tx_wr_index=0,tx_rd_index=0;
 #endif
 
 #if TX_BUFFER_SIZE < 256
-unsigned char tx_counter=0;
+volatile unsigned char tx_counter=0;
 #else
-unsigned int tx_counter=0;
+volatile unsigned int tx_counter=0;
 #endif
 
 // USART transmit-complete handler — sends the next buffered byte, if any
-interrupt [USART_TXC] void usart_tx_isr(void)
+ISR(USART_TXC_vect)
 {
 if (tx_counter)
    {
@@ -120,13 +128,12 @@ if (tx_counter)
    }
 }
 
-#ifndef _DEBUG_TERMINAL_IO_
-#define _ALTERNATE_PUTCHAR_
-#pragma used+
-void putchar(char c)
+// Queue one byte for transmission (blocks only while the buffer is full)
+static int usart_putchar(char c, FILE *stream)
 {
+(void)stream;
 while (tx_counter == TX_BUFFER_SIZE);
-#asm("cli")
+cli();
 if (tx_counter || ((UCSRA & DATA_REGISTER_EMPTY)==0))
    {
    tx_buffer[tx_wr_index++]=c;
@@ -137,29 +144,39 @@ if (tx_counter || ((UCSRA & DATA_REGISTER_EMPTY)==0))
    }
 else
    UDR=c;
-#asm("sei")
-}
-#pragma used-
-#endif`;
+sei();
+return 0;
+}`;
 }
 
+function generatePolledTx(): string {
+  return `// Send one byte over the USART (polled)
+static int usart_putchar(char c, FILE *stream)
+{
+(void)stream;
+while ((UCSRA & DATA_REGISTER_EMPTY)==0);
+UDR=c;
+return 0;
+}`;
+}
+
+// avr-libc has no built-in getchar/putchar backend: stdio goes through a
+// FILE stream wired to these functions, and main() points stdin/stdout at it.
+// (The old CodeVision version relied on _ALTERNATE_GETCHAR_ / #pragma used+,
+// which avr-gcc doesn't understand.)
 export function generateUSARTPreamble(config: USARTConfig): string {
-  const parts: string[] = [];
-  if (config.rxInterrupt) parts.push(generateRxBuffer());
-  if (config.txInterrupt) parts.push(generateTxBuffer());
-  // stdio.h is needed once, for either interrupt-driven or polled I/O —
-  // previously these were two separate checks with overlapping conditions
-  // (e.g. rxInterrupt=false, txInterrupt=true, receiver=true would hit both),
-  // producing the same #include block twice.
-  const needsStdio = config.rxInterrupt || config.txInterrupt || config.receiver || config.transmitter;
-  if (needsStdio) {
-    parts.push(`// Wire up getchar/putchar for printf-style I/O\n#include <stdio.h>`);
-  }
+  const parts: string[] = [STATUS_DEFINES];
+  parts.push(config.rxInterrupt ? generateRxBuffer() : generatePolledRx());
+  parts.push(config.txInterrupt ? generateTxBuffer() : generatePolledTx());
+  parts.push(`// printf/scanf stream bound to the USART
+static FILE usart_stream = FDEV_SETUP_STREAM(usart_putchar, usart_getchar, _FDEV_SETUP_RW);`);
   return parts.join("\n\n");
 }
 
 export function generateUSARTInit(config: USARTConfig, clockHz: number): string {
-  const ubrr = calcUBRR(clockHz, config.baudRate, false);
+  // Datasheet: async normal speed is fosc/(16*BAUD), synchronous master is
+  // fosc/(2*BAUD). (Slave mode ignores UBRR — the clock comes from XCK.)
+  const ubrr = calcUBRR(clockHz, config.baudRate, config.mode === "async" ? 16 : 2);
   const ubrrh = (ubrr >> 8) & 0xFF;
   const ubrrl = ubrr & 0xFF;
 

@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { WizardPanel } from "./wizardPanel";
 import { flashDevice } from "./flashCommand";
-import { resolveToolchain, getInstallGuide } from "./utils/toolchain";
+import { resolveToolchain, resolveAvrdude, showInstallGuide } from "./utils/toolchain";
+import { healProjectConfig } from "./projectConfig";
 
 export function activate(context: vscode.ExtensionContext): void {
 
@@ -25,27 +26,35 @@ export function activate(context: vscode.ExtensionContext): void {
       const toolchain = await resolveToolchain();
       if (toolchain) {
         const src = toolchain.source === "setting" ? "from your settings" : "auto-detected";
+        const avrdude = await resolveAvrdude();
+        const flash = avrdude ? `avrdude → ${avrdude}` : "avrdude not found (needed only for flashing)";
         vscode.window.showInformationMessage(
-          `crystal-11: avr-gcc found (${src}) → ${toolchain.gccPath}`
+          `crystal-11: avr-gcc found (${src}) → ${toolchain.gccPath}. ${flash}`
         );
       } else {
-        const guide = getInstallGuide();
         const choice = await vscode.window.showErrorMessage(
           "crystal-11: avr-gcc not found on your system.",
           "Show Install Instructions",
           "Set Path Manually"
         );
         if (choice === "Show Install Instructions") {
-          vscode.window.showInformationMessage(
-            `Run this in your terminal:\n${guide.command}`,
-            { modal: true, detail: guide.note }
-          );
+          await showInstallGuide();
         } else if (choice === "Set Path Manually") {
           await vscode.commands.executeCommand(
             "workbench.action.openSettings", "crystal11.avrGccPath"
           );
         }
       }
+    })
+  );
+
+  // Projects carry absolute toolchain paths in .vscode/. When one is opened
+  // on another computer (or avr-gcc was installed after creating it), point
+  // it at this machine's toolchain so users never edit config by hand.
+  healProjectConfig().catch((err) => console.error("crystal-11: heal failed", err));
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      healProjectConfig().catch((err) => console.error("crystal-11: heal failed", err));
     })
   );
 

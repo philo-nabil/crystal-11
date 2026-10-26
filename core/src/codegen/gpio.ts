@@ -19,7 +19,7 @@ function generatePortInit(portLetter: string, pins: PinConfig[]): string {
   const padded = [...pins];
   while (padded.length < 8) padded.push(defaultPin());
 
-  const dirBits = padded.map((p, i) => `(${pinDirection(p)}<<DD${portLetter}${i})`).reverse().join(" | ");
+  const dirBits = padded.map((p, i) => `(${pinDirection(p)}<<DDR${portLetter}${i})`).reverse().join(" | ");
   const stateBits = padded.map((p, i) => `(${pinState(p)}<<PORT${portLetter}${i})`).reverse().join(" | ");
 
   // Comments list Bit7..Bit0 (descending), matching the register-term order

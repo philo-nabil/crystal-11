@@ -28,21 +28,21 @@ export function generateExternalInterruptsInit(config: ExternalInterruptConfig):
   const isrs: string[] = [];
   if (int0?.enabled) {
     isrs.push(`// INT0 handler
-interrupt [EXT_INT0] void ext_int0_isr(void)
+ISR(INT0_vect)
 {
 // Place your code here
 }`);
   }
   if (int1?.enabled) {
     isrs.push(`// INT1 handler
-interrupt [EXT_INT1] void ext_int1_isr(void)
+ISR(INT1_vect)
 {
 // Place your code here
 }`);
   }
   if (int2?.enabled) {
     isrs.push(`// INT2 handler
-interrupt [EXT_INT2] void ext_int2_isr(void)
+ISR(INT2_vect)
 {
 // Place your code here
 }`);

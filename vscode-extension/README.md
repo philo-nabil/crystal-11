@@ -7,10 +7,10 @@ Configure GPIO, USART, ADC, timers, SPI, I2C, and external interrupts in a wizar
 ## Features
 
 - Peripheral wizard: GPIO, USART, ADC, Timer0/1/2, SPI, I2C (TWI), INT0/INT1/INT2
-- Generates C init code for ATmega32A (`F_CPU=11059200UL`)
-- Create a new project folder with `main.c` and C/C++ IntelliSense settings
+- Generates avr-gcc C init code for ATmega32A at any clock (default 11.0592 MHz)
+- Create a ready-to-build project: `main.c`, IntelliSense settings, and a build task (Ctrl/Cmd+Shift+B → `main.hex`)
 - Flash a `.hex` via avrdude (USBasp, AVRISP mkII, Arduino as ISP, STK500)
-- Auto-detects `avr-gcc` (Homebrew, apt, WinAVR) or use a custom path
+- No configuration: finds `avr-gcc` and `avrdude` from PATH, Homebrew, apt, Arduino IDE, Microchip Studio, WinAVR or Scoop, and fixes project paths when you open a project on another computer
 
 ## Getting started
 
@@ -33,6 +33,7 @@ To flash: right-click a `.hex` file and choose **crystal-11: Flash to Device**, 
 | Setting | Default | Description |
 |---|---|---|
 | `crystal11.avrGccPath` | *(empty)* | Path to `avr-gcc`; leave empty to auto-detect |
+| `crystal11.avrdudePath` | *(empty)* | Path to `avrdude`; leave empty to auto-detect |
 | `crystal11.programmer` | `usbasp` | ISP programmer type |
 | `crystal11.avrdudePort` | `usb` | avrdude port (`usb`, `COM3`, `/dev/ttyUSB0`, …) |
 | `crystal11.avrdudeExtra` | *(empty)* | Extra avrdude flags |
@@ -42,7 +43,7 @@ To flash: right-click a `.hex` file and choose **crystal-11: Flash to Device**, 
 - **avr-gcc** to build generated C
 - **avrdude** to flash
 
-The wizard still generates code without them.
+The easiest way to get both on any OS is to install the [Arduino IDE](https://www.arduino.cc/en/software) — crystal-11 picks up its toolchain automatically. Run **crystal-11: Check avr-gcc Installation** for OS-specific instructions. The wizard still generates code without them.
 
 ## License
 

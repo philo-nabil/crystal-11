@@ -3,6 +3,7 @@ import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { isSafePath } from "./utils/validate";
+import { resolveAvrdude, showInstallGuide } from "./utils/toolchain";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,6 +35,22 @@ export async function flashDevice(hexPath: string): Promise<void> {
     return;
   }
 
+  // Find avrdude instead of assuming it's on PATH — a GUI-launched VS Code
+  // often has a minimal PATH, and Arduino IDE's avrdude never is.
+  const avrdude = await resolveAvrdude();
+  if (!avrdude) {
+    const choice = await vscode.window.showErrorMessage(
+      "crystal-11: avrdude not found on your system.",
+      "Show Install Instructions", "Set Path Manually"
+    );
+    if (choice === "Show Install Instructions") {
+      await showInstallGuide();
+    } else if (choice === "Set Path Manually") {
+      await vscode.commands.executeCommand("workbench.action.openSettings", "crystal11.avrdudePath");
+    }
+    return;
+  }
+
   const config = vscode.workspace.getConfiguration("crystal11");
   const programmer = (config.get<string>("programmer") ?? "usbasp") as Programmer;
   const port = config.get<string>("avrdudePort") ?? "usb";
@@ -57,26 +74,38 @@ export async function flashDevice(hexPath: string): Promise<void> {
     args.push(...extra.trim().split(/\s+/));
   }
 
-  const terminal = vscode.window.createTerminal("crystal-11 Flash");
-  terminal.show();
-
-  // Show the command for transparency
-  terminal.sendText(`avrdude ${args.join(" ")}`);
+  // Run avrdude exactly once. This used to also sendText() the same command
+  // to a terminal, so two avrdude processes raced for the programmer and one
+  // of them always failed. Output goes to an output channel instead.
+  const output = getOutputChannel();
+  output.show(true);
+  output.appendLine(`> ${avrdude} ${args.join(" ")}`);
 
   vscode.window.showInformationMessage(
     `crystal-11: Flashing ${path.basename(resolved)}...`
   );
 
-  // Also run programmatically to capture errors
   try {
-    const { stderr } = await execFileAsync("avrdude", args);
+    // avrdude writes all of its progress to stderr, even on success.
+    const { stdout, stderr } = await execFileAsync(avrdude, args);
+    if (stdout) { output.append(stdout); }
+    if (stderr) { output.append(stderr); }
     if (stderr && !stderr.includes("bytes of flash verified")) {
       vscode.window.showWarningMessage(`avrdude: ${stderr.trim().split("\n")[0]}`);
     } else {
       vscode.window.showInformationMessage("crystal-11: Flash complete.");
     }
   } catch (err: unknown) {
+    const e = err as { stderr?: string; message?: string };
+    if (e.stderr) { output.append(e.stderr); }
     const msg = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`crystal-11: Flash failed — ${msg}`);
   }
+}
+
+let outputChannel: vscode.OutputChannel | undefined;
+
+function getOutputChannel(): vscode.OutputChannel {
+  outputChannel ??= vscode.window.createOutputChannel("crystal-11 Flash");
+  return outputChannel;
 }

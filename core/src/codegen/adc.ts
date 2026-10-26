@@ -56,7 +56,7 @@ unsigned char read_adc(unsigned char adc_input)
 {
 ADMUX=adc_input | ADC_VREF_TYPE;
 // let the input settle before sampling
-delay_us(10);
+_delay_us(10);
 // kick off a conversion
 ADCSRA|=(1<<ADSC);
 // spin until it's done
@@ -71,7 +71,7 @@ unsigned int read_adc(unsigned char adc_input)
 {
 ADMUX=adc_input | ADC_VREF_TYPE;
 // let the input settle before sampling
-delay_us(10);
+_delay_us(10);
 // kick off a conversion
 ADCSRA|=(1<<ADSC);
 // spin until it's done
@@ -82,43 +82,43 @@ return ADCW;
     }
   }
 
-  // with interrupt
+  // with interrupt — in 10-bit mode (ADLAR=0) ADCH only holds the top 2 bits,
+  // so read the whole ADCW word instead.
+  const dataType = config.use8bit ? "unsigned char" : "unsigned int";
+  const dataReg = config.use8bit ? "ADCH" : "ADCW";
+  const dataDesc = config.use8bit ? "the top 8 bits of the result" : "the full 10-bit result";
   if (config.noiseCanceler) {
-    return `unsigned char adc_data;
+    return `volatile ${dataType} adc_data;
 ${vrefLine}
 // ADC conversion-complete handler
-interrupt [ADC_INT] void adc_isr(void)
+ISR(ADC_vect)
 {
-// stash the top 8 bits of the result
-adc_data=ADCH;
+// stash ${dataDesc}
+adc_data=${dataReg};
 }
 // Puts the MCU into ADC noise-reduction sleep while converting,
-// then returns the top 8 bits once the ISR above fires
-unsigned char read_adc(unsigned char adc_input)
+// then returns ${dataDesc} once the ISR above fires
+${dataType} read_adc(unsigned char adc_input)
 {
 ADMUX=adc_input | ADC_VREF_TYPE;
 // let the input settle before sampling
-delay_us(10);
-#asm
-    in   r30,mcucr
-    cbr  r30,__sm_mask
-    sbr  r30,__se_bit | __sm_adc_noise_red
-    out  mcucr,r30
-    sleep
-    cbr  r30,__se_bit
-    out  mcucr,r30
-#endasm
+_delay_us(10);
+// entering ADC noise-reduction sleep starts the conversion; the ADC
+// interrupt wakes the CPU (global interrupts must be enabled)
+set_sleep_mode(SLEEP_MODE_ADC);
+sleep_mode();
 return adc_data;
 }`;
   }
 
-  return `${vrefLine}
+  return `// latest conversion result, written by the ADC interrupt
+volatile ${dataType} adc_data;
+${vrefLine}
 // ADC conversion-complete handler
-interrupt [ADC_INT] void adc_isr(void)
+ISR(ADC_vect)
 {
-unsigned char adc_data;
-// top 8 bits of the result
-adc_data=ADCH;
+// ${dataDesc}
+adc_data=${dataReg};
 // Place your code here
 }`;
 }

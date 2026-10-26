@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
 import * as crypto from "crypto";
-import * as path from "path";
 import { generateCode } from "crystal-11-core";
 import { WizardConfig } from "crystal-11-core/types";
 import { isSafePath } from "./utils/validate";
-import { resolveToolchain, getInstallGuide } from "./utils/toolchain";
+import { resolveToolchain, showInstallGuide } from "./utils/toolchain";
+import { writeProjectConfig } from "./projectConfig";
 
 // Security: hex encoding — no padding chars (+, /, =) unlike base64.
 // Skill rule: nonces must use hex encoding, not base64.
@@ -63,6 +63,7 @@ export class WizardPanel {
         config?: WizardConfig;
         meta?: Record<string, string>;
         code?: string;
+        clockHz?: number;
       }) => {
         switch (message.command) {
           case "generate":
@@ -77,7 +78,7 @@ export class WizardPanel {
             break;
           case "createProject":
             if (message.code !== undefined) {
-              await this._handleCreateProject(message.code);
+              await this._handleCreateProject(message.code, message.clockHz);
             }
             break;
           default:
@@ -146,14 +147,13 @@ export class WizardPanel {
     await vscode.window.showTextDocument(doc);
   }
 
-  private async _handleCreateProject(code: string): Promise<void> {
+  private async _handleCreateProject(code: string, clockHz?: number): Promise<void> {
     const enc = new TextEncoder();
 
     // ── 1. Resolve avr-gcc ────────────────────────────────────────────────────
     const toolchain = await resolveToolchain();
 
     if (!toolchain) {
-      const guide = getInstallGuide();
       const choice = await vscode.window.showErrorMessage(
         `crystal-11: avr-gcc not found on your system.`,
         "Show Install Instructions",
@@ -161,10 +161,7 @@ export class WizardPanel {
         "Continue Anyway"
       );
       if (choice === "Show Install Instructions") {
-        await vscode.window.showInformationMessage(
-          `Run this in your terminal:\n${guide.command}`,
-          { modal: true, detail: guide.note }
-        );
+        await showInstallGuide();
         return;
       } else if (choice === "Set Path Manually") {
         await vscode.commands.executeCommand(
@@ -204,11 +201,18 @@ export class WizardPanel {
 
     const projectUri = vscode.Uri.joinPath(parentUri, projectName.trim());
 
+    // Don't silently overwrite an existing project's main.c.
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.joinPath(projectUri, "main.c"));
+      const overwrite = await vscode.window.showWarningMessage(
+        `crystal-11: "${projectName.trim()}" already has a main.c. Overwrite it?`,
+        { modal: true }, "Overwrite"
+      );
+      if (overwrite !== "Overwrite") { return; }
+    } catch { /* doesn't exist yet — fine */ }
+
     // ── 4. Create folders ─────────────────────────────────────────────────────
     await vscode.workspace.fs.createDirectory(projectUri);
-    await vscode.workspace.fs.createDirectory(
-      vscode.Uri.joinPath(projectUri, ".vscode")
-    );
 
     // ── 5. Write main.c ───────────────────────────────────────────────────────
     await vscode.workspace.fs.writeFile(
@@ -216,79 +220,15 @@ export class WizardPanel {
       enc.encode(code)
     );
 
-    // ── 6. Write .vscode/c_cpp_properties.json ────────────────────────────────
-    const gccPath    = toolchain?.gccPath    ?? (process.platform === "win32"
-      ? "C:\\WinAVR-20100110\\bin\\avr-gcc.exe"
-      : "/usr/bin/avr-gcc");
-    const includeDir = toolchain?.includePath ?? "/usr/avr/include";
-
-    const cppProps = {
-      configurations: [{
-        name: "AVR",
-        includePath: [
-          includeDir,
-          "/opt/homebrew/avr/include",
-          "/usr/local/avr/include",
-          "/usr/lib/avr/include",
-          "\${workspaceFolder}/**",
-        ],
-        defines: ["F_CPU=11059200UL", "__AVR_ATmega32A__"],
-        compilerPath: gccPath,
-        cStandard: "gnu99",
-        intelliSenseMode: "gcc-x64",
-      }],
-      version: 4,
-    };
-
-    await vscode.workspace.fs.writeFile(
-      vscode.Uri.joinPath(projectUri, ".vscode", "c_cpp_properties.json"),
-      enc.encode(JSON.stringify(cppProps, null, 2))
-    );
-
-    // ── 6b. Write .vscode/tasks.json ──────────────────────────────────────────
-    // Compiles main.c -> main.elf -> main.hex via avr-gcc + avr-objcopy.
-    // Without this, there was no way to turn the generated main.c into
-    // anything flashDevice() could actually flash.
-    const objcopyPath = gccPath.replace(
-      /avr-gcc(\.exe)?$/,
-      process.platform === "win32" ? "avr-objcopy.exe" : "avr-objcopy"
-    );
-
-    const tasksJson = {
-      version: "2.0.0",
-      tasks: [
-        {
-          label: "avr-gcc: build .hex",
-          type: "shell",
-          command: [
-            `"${gccPath}"`,
-            "-mmcu=atmega32a",
-            "-DF_CPU=11059200UL",
-            "-Os",
-            "main.c",
-            "-o", "main.elf",
-            "&&",
-            `"${objcopyPath}"`,
-            "-O", "ihex",
-            "-R", ".eeprom",
-            "main.elf", "main.hex",
-          ].join(" "),
-          group: { kind: "build", isDefault: true },
-          problemMatcher: ["$gcc"],
-          presentation: { reveal: "always", panel: "shared" },
-        },
-      ],
-    };
-
-    await vscode.workspace.fs.writeFile(
-      vscode.Uri.joinPath(projectUri, ".vscode", "tasks.json"),
-      enc.encode(JSON.stringify(tasksJson, null, 2))
-    );
+    // ── 6. Write .vscode config (IntelliSense, build tasks, marker) ───────────
+    // Shared with healProjectConfig(), which re-runs this when the project is
+    // opened on a computer whose toolchain lives somewhere else.
+    await writeProjectConfig(projectUri, toolchain, clockHz);
 
     // ── 7. Open project ───────────────────────────────────────────────────────
     const note = toolchain
       ? `avr-gcc found at ${toolchain.gccPath}. Press Cmd/Ctrl+Shift+B to build main.hex.`
-      : "⚠️ avr-gcc not found — install it before building";
+      : "⚠️ avr-gcc isn't installed yet — install it, then reopen the folder and crystal-11 will set it up automatically.";
 
     const choice = await vscode.window.showInformationMessage(
       `crystal-11: Project "${projectName.trim()}" created. ${note}`,
@@ -550,6 +490,18 @@ export class WizardPanel {
     </div>
     <div class="collapsible" id="t1-section">
       <div class="row">
+        <div class="field"><label>Mode</label>
+          <select id="t1-mode" data-action="update">
+            <option value="normal">Normal top=FFFFh</option>
+            <option value="ctc_ocr1a">CTC top=OCR1A</option><option value="ctc_icr1">CTC top=ICR1</option>
+            <option value="fast_pwm_8bit">Fast PWM top=00FFh</option><option value="fast_pwm_9bit">Fast PWM top=01FFh</option>
+            <option value="fast_pwm_10bit">Fast PWM top=03FFh</option><option value="fast_pwm_icr1">Fast PWM top=ICR1</option>
+            <option value="fast_pwm_ocr1a">Fast PWM top=OCR1A</option>
+            <option value="phase_correct_8bit">Phase Correct PWM top=00FFh</option>
+            <option value="phase_correct_9bit">Phase Correct PWM top=01FFh</option>
+            <option value="phase_correct_10bit">Phase Correct PWM top=03FFh</option>
+          </select>
+        </div>
         <div class="field"><label>Prescaler</label>
           <select id="t1-prescaler" data-action="update">
             <option value="off">Timer Stopped</option><option value="1">1</option><option value="8">8</option>
@@ -716,15 +668,17 @@ export class WizardPanel {
 // Inline onclick="..." handlers are blocked by CSP — use event delegation.
 const vscode = acquireVsCodeApi();
 let lastCode = '';
+let lastClockHz = 11059200;
 
 document.addEventListener('change', handleEvent);
 document.addEventListener('input', handleEvent);
 document.addEventListener('click', handleEvent);
 
 function handleEvent(e) {
-  const target = e.target;
+  // closest() so clicks on child elements (e.g. the sidebar dot) still count
+  const target = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
   if (!target) { return; }
-  const action = target.dataset ? target.dataset.action : null;
+  const action = target.dataset.action;
   if (!action) { return; }
   if (action === 'nav' && e.type === 'click') {
     const item = target.closest ? target.closest('[data-panel]') : null;
@@ -1127,14 +1081,16 @@ function buildConfig() {
   var clockHz = parseInt(raw, 10);
   if (isNaN(clockHz) || clockHz <= 0) { clockHz = 11059200; } // fallback
 
+  // Read from portState, not the DOM — only the active port tab has its
+  // selects rendered, so reading the DOM silently reset every other port to
+  // input/tristate.
+  saveTabToState(activePort);
   var ports = {};
   ['A','B','C','D'].forEach(function(p) {
     var pins = [];
     for (var i = 0; i < 8; i++) {
-      var dirEl   = g('pin-' + p + '-' + i + '-dir');
-      var stateEl = g('pin-' + p + '-' + i + '-state');
-      var dir   = dirEl   ? dirEl.value   : 'in';
-      var state = stateEl ? stateEl.value : 'T';
+      var dir   = portState[p][i].dir;
+      var state = portState[p][i].state;
       if      (dir === 'out' && state === '0') { pins[i] = {mode:'out', state:'low'     }; }
       else if (dir === 'out' && state === '1') { pins[i] = {mode:'out', state:'high'    }; }
       else if (dir === 'in'  && state === 'P') { pins[i] = {mode:'in',  state:'pullup'  }; }
@@ -1160,7 +1116,7 @@ function buildConfig() {
       overflowInterrupt:g('t0-ovf').checked, compareInterrupt:g('t0-cmp').checked};
   }
   if (g('t1-enabled').checked) {
-    config.timer1 = {mode:'normal', prescaler:g('t1-prescaler').value,
+    config.timer1 = {mode:g('t1-mode').value, prescaler:g('t1-prescaler').value,
       overflowInterrupt:g('t1-ovf').checked, compareAInterrupt:g('t1-cmpa').checked,
       compareBInterrupt:g('t1-cmpb').checked, captureInterrupt:g('t1-cap').checked};
   }
@@ -1197,7 +1153,9 @@ function buildMeta() {
 
 function generate() {
   g('hint').textContent = 'Generating...';
-  vscode.postMessage({command:'generate', config:buildConfig(), meta:buildMeta()});
+  var config = buildConfig();
+  lastClockHz = config.clockHz;
+  vscode.postMessage({command:'generate', config:config, meta:buildMeta()});
 }
 
 function saveToFile() {
@@ -1207,7 +1165,7 @@ function saveToFile() {
 
 function createProject() {
   if (!lastCode) { return; }
-  vscode.postMessage({command:'createProject', code:lastCode});
+  vscode.postMessage({command:'createProject', code:lastCode, clockHz:lastClockHz});
 }
 
 window.addEventListener('message', function(e) {

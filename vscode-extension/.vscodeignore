@@ -14,3 +14,9 @@ node_modules/
 .gitattributes
 
 # NOTE: Do NOT add **/*.md here — the Marketplace displays README.md
+
+# Dev-only / unused files
+.vscode/
+.eslintrc.json
+*.vsix
+webview/

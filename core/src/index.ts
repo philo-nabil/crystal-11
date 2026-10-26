@@ -2,7 +2,7 @@ import { WizardConfig } from "./types";
 import { generateGPIO } from "./codegen/gpio";
 import { generateUSARTPreamble, generateUSARTInit } from "./codegen/usart";
 import { generateADCPreamble, generateADCInit } from "./codegen/adc";
-import { generateTimer0Init, generateTimer1Init, generateTimer2Init } from "./codegen/timers";
+import { generateTimer0Init, generateTimer1Init, generateTimer2Init, generateTimerInterruptsInit } from "./codegen/timers";
 import { generateSPIInit, generateI2CInit } from "./codegen/spi_i2c";
 import { generateExternalInterruptsInit } from "./codegen/interrupts";
 
@@ -20,14 +20,27 @@ export function generateCode(config: WizardConfig, meta?: {
 }): string {
   const m = meta ?? {};
   const clockMHz = (config.clockHz / 1_000_000).toFixed(6);
-  const needsDelay = !!config.adc?.enabled;
+  // read_adc() waits for the input to settle with _delay_us(); it only exists
+  // in the polled and noise-canceler variants.
+  const needsDelay = !!config.adc?.enabled && (!config.adc.interrupt || config.adc.noiseCanceler);
+  const needsSleep = !!config.adc?.enabled && config.adc.interrupt && config.adc.noiseCanceler;
   const needsSei =
     config.usart?.rxInterrupt ||
     config.usart?.txInterrupt ||
     config.adc?.interrupt ||
     config.externalInterrupts?.int0?.enabled ||
     config.externalInterrupts?.int1?.enabled ||
-    config.externalInterrupts?.int2?.enabled;
+    config.externalInterrupts?.int2?.enabled ||
+    config.timer0?.overflowInterrupt ||
+    config.timer0?.compareInterrupt ||
+    config.timer1?.overflowInterrupt ||
+    config.timer1?.compareAInterrupt ||
+    config.timer1?.compareBInterrupt ||
+    config.timer1?.captureInterrupt ||
+    config.timer2?.overflowInterrupt ||
+    config.timer2?.compareInterrupt ||
+    (config.spi?.enabled && config.spi.interrupt) ||
+    (config.i2c?.enabled && config.i2c.interrupt);
 
   const preambles: string[] = [];
 
@@ -60,7 +73,7 @@ export function generateCode(config: WizardConfig, meta?: {
   // SPI ISR
   if (config.spi?.enabled && config.spi.interrupt) {
     preambles.push(`// SPI interrupt handler
-interrupt [SPI_STC] void spi_isr(void)
+ISR(SPI_STC_vect)
 {
 // Place your code here
 }`);
@@ -69,7 +82,7 @@ interrupt [SPI_STC] void spi_isr(void)
   // I2C ISR
   if (config.i2c?.enabled && config.i2c.interrupt) {
     preambles.push(`// I2C (TWI) interrupt handler
-interrupt [TWI_INT] void twi_isr(void)
+ISR(TWI_vect)
 {
 // Place your code here
 }`);
@@ -87,6 +100,9 @@ interrupt [TWI_INT] void twi_isr(void)
   if (config.timer0) initBlocks.push(generateTimer0Init(config.timer0));
   if (config.timer1) initBlocks.push(generateTimer1Init(config.timer1));
   if (config.timer2) initBlocks.push(generateTimer2Init(config.timer2));
+  if (config.timer0 || config.timer1 || config.timer2) {
+    initBlocks.push(generateTimerInterruptsInit(config.timer0, config.timer1, config.timer2));
+  }
 
   if (config.usart) initBlocks.push(generateUSARTInit(config.usart, config.clockHz));
   if (config.adc?.enabled) initBlocks.push(generateADCInit(config.adc, config.clockHz));
@@ -107,17 +123,35 @@ Target MCU  : ATmega32A
 Core clock  : ${clockMHz} MHz
 *******************************************************/`;
 
+  // Output targets avr-gcc + avr-libc (the toolchain the extension detects
+  // and builds with). It used to be CodeVision dialect (<mega32a.h>,
+  // interrupt [..], #asm, bit), which avr-gcc can't compile at all.
+  // The ring-buffer USART code always uses cli()/sei(), so it needs
+  // <avr/interrupt.h> even when no interrupt is enabled globally.
+  const needsInterruptH = needsSei || preambles.some(p => p.includes("ISR(") || p.includes("sei()"));
   const includes = [
-    `#include <mega32a.h>`,
-    needsDelay ? `#include <delay.h>` : null,
-  ].filter(Boolean).join("\n");
+    `#ifndef F_CPU`,
+    `#define F_CPU ${Math.round(config.clockHz)}UL`,
+    `#endif`,
+    ``,
+    `#include <avr/io.h>`,
+    needsInterruptH ? `#include <avr/interrupt.h>` : null,
+    needsSleep ? `#include <avr/sleep.h>` : null,
+    needsDelay ? `#include <util/delay.h>` : null,
+    config.usart ? `#include <stdio.h>` : null,
+  ].filter(x => x !== null).join("\n");
+
+  const usartStdio = config.usart
+    ? `// Route printf/scanf through the USART\nstdout = &usart_stream;\nstdin = &usart_stream;`
+    : null;
 
   const mainBody = [
-    `void main(void)\n{`,
+    `int main(void)\n{`,
     `// Declare your local variables here`,
     ``,
     initBlocks.join("\n\n"),
-    needsSei ? `// Global enable interrupts\n#asm("sei")` : null,
+    usartStdio,
+    needsSei ? `// Global enable interrupts\nsei();` : null,
     `while (1)\n      {\n      // Place your code here\n\n      }`,
     `}`,
   ].filter(x => x !== null).join("\n");
