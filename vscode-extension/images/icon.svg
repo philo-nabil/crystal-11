@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a5c"/>
+      <stop offset="1" stop-color="#0b1230"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#5eead4" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#5eead4" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#bg)"/>
+  <!-- leads -->
+  <g stroke="#9fb3d9" stroke-width="9" stroke-linecap="round">
+    <line x1="44" y1="104" x2="92" y2="104"/>
+    <line x1="44" y1="128" x2="92" y2="128"/>
+    <line x1="44" y1="152" x2="92" y2="152"/>
+    <line x1="164" y1="104" x2="212" y2="104"/>
+    <line x1="164" y1="128" x2="212" y2="128"/>
+    <line x1="164" y1="152" x2="212" y2="152"/>
+  </g>
+  <!-- crystal -->
+  <ellipse cx="128" cy="128" rx="78" ry="96" fill="url(#glow)" opacity="0.45"/>
+  <g stroke="#0b1230" stroke-width="3" stroke-linejoin="round">
+    <polygon points="128,36 128,80 92,96 86,84" fill="#a5f3fc"/>
+    <polygon points="128,36 170,84 164,96 128,80" fill="#67e8f9"/>
+    <polygon points="86,84 92,96 92,168 86,172" fill="#22d3ee"/>
+    <polygon points="92,96 128,80 128,184 92,168" fill="#5eead4"/>
+    <polygon points="128,80 164,96 164,168 128,184" fill="#14b8a6"/>
+    <polygon points="164,96 170,84 170,172 164,168" fill="#0f766e"/>
+    <polygon points="86,172 92,168 128,184 128,220" fill="#0d9488"/>
+    <polygon points="128,184 164,168 170,172 128,220" fill="#115e59"/>
+  </g>
+  <!-- sparkle -->
+  <path d="M106 112 l4 -12 l4 12 l12 4 l-12 4 l-4 12 l-4 -12 l-12 -4 z" fill="#ffffff" opacity="0.9"/>
+</svg>

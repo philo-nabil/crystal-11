@@ -20,3 +20,4 @@ node_modules/
 .eslintrc.json
 *.vsix
 webview/
+images/icon.svg
