@@ -1,5 +1,8 @@
 # crystal-11
 
+[![Install from the VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-Install-0a7f5f?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=philo-nabil.crystal-11-avr-wizard)
+[![Download the .vsix](https://img.shields.io/badge/Release-v0.2.1%20.vsix-1f2328?style=for-the-badge&logo=github&logoColor=white)](https://github.com/philo-nabil/crystal-11/releases/latest)
+
 A VS Code extension that generates peripheral init code for the ATmega32A.
 
 The name comes from 11.0592 MHz, the crystal most ATmega32A courses use,
